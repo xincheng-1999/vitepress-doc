@@ -1,20 +1,41 @@
 // .vitepress/config.js
-export default {
+import { defineConfig } from "vitepress";
+export default defineConfig({
   // site-level options
-  title: "文档",
+  title: "前端笔记文档",
   description: "Just playing around.",
+  lang: "zh",
 
   themeConfig: {
+    // i18nRouting: true,
+    siteTitle: "GXC の 笔记",
+    logo: "/logo.webp",
     // theme-level options
-    sidebar: [
+    sidebar: {
+      "/front-end/interview-questions/": [
+        {
+          text: "前端",
+          items: [
+            { text: "手写题", link: "/front-end/interview-questions/handwritten-code.md" },
+            { text: "常见面试题", link: "/front-end/interview-questions/interview-questions.md" },
+          ],
+        },
+      ],
+    },
+    nav: [
+      { text: "前端", items: [{ text: "面试题", link: "/front-end/interview-questions/handwritten-code.md" }] },
       {
-        text: "Guide",
+        text: "Dropdown Menu",
         items: [
-          { text: "Introduction", link: "/markdown-examples" },
-          { text: "Getting Started", link: "/markdown-examples" },
+          { text: "Item A", link: "/item-1" },
+          { text: "Item B", link: "/item-2" },
+          { text: "Item C", link: "/item-3" },
         ],
       },
     ],
+    search: {
+      provider: "local",
+    },
   },
   srcDir: "src",
-};
+});
