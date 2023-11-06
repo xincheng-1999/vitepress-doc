@@ -1,9 +1,7 @@
-# Hello VitePress 哈哈
-
-## fsdf
+# 文档
 
 <!-- Do -->
 
-[Getting Started](./markdown-examples)
+[Getting Started](/front-end/interview-questions/handwritten-code)
 
 [Link to pure.html](https://www.baidu.com)
