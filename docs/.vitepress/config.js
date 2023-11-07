@@ -5,6 +5,7 @@ export default defineConfig({
   title: "前端笔记文档",
   description: "Just playing around.",
   lang: "zh",
+  base: "/vitepress-doc/",
   themeConfig: {
     // i18nRouting: true,
     siteTitle: "GXC の 笔记",
