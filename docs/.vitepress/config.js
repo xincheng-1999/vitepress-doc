@@ -5,7 +5,7 @@ export default defineConfig({
   title: "前端笔记文档",
   description: "Just playing around.",
   lang: "zh",
-  outDir: "../dist",
+  outDir: "../distDir",
   themeConfig: {
     // i18nRouting: true,
     siteTitle: "GXC の 笔记",
