@@ -8,7 +8,7 @@ export default defineConfig({
   base: "/vitepress-doc/",
   themeConfig: {
     // i18nRouting: true,
-    siteTitle: "GXC の 笔记安利给",
+    siteTitle: "GXC の 笔记%%",
     logo: "/logo.webp",
     // theme-level options
     sidebar: {
