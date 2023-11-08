@@ -10,6 +10,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -35,8 +36,4 @@ jobs:
           path: docs/.vitepress/dist
       - name: Deploy
         id: deployment
-        uses: actions/deploy-pages@v1
-        with:
-          token: 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
-          branch: gh-pages # 指定目标分支
-          folder: docs/.vitepress/dist
+        uses: actions/deploy-pages@v2
