@@ -37,6 +37,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v1
         with:
-          token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
+          token: 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
           branch: gh-pages # 指定目标分支
           folder: docs/.vitepress/dist
