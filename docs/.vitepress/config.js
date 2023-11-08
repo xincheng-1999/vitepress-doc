@@ -16,16 +16,31 @@ export default defineConfig({
     sidebar: {
       "/front-end/interview-questions/": [
         {
-          text: "前端",
+          text: "面试题",
           items: [
             { text: "手写题", link: "/front-end/interview-questions/handwritten-code.md" },
             { text: "常见面试题", link: "/front-end/interview-questions/interview-questions.md" },
           ],
         },
       ],
+      "/front-end/vue/": [
+        {
+          text: "Vue相关",
+          items: [{ text: "reference", link: "/front-end/vue/" }],
+        },
+      ],
     },
     nav: [
-      { text: "前端", items: [{ text: "面试题", link: "/front-end/interview-questions/handwritten-code.md" }] },
+      {
+        text: "前端",
+        items: [
+          { text: "面试题", link: "/front-end/interview-questions/handwritten-code.md" },
+          {
+            text: "Vue相关",
+            link: "/front-end/vue/",
+          },
+        ],
+      },
       {
         text: "Dropdown Menu",
         items: [
