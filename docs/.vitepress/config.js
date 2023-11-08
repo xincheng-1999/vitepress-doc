@@ -6,10 +6,12 @@ export default defineConfig({
   description: "Just playing around.",
   lang: "zh",
   base: "/vitepress-doc/",
+  srcDir: "src",
+  head: [["link", { rel: "icon", href: "/favicon.ico" }]],
   themeConfig: {
     // i18nRouting: true,
     siteTitle: "GXC の 笔记%%",
-    logo: "../logo.webp",
+    logo: "/logo.webp",
     // theme-level options
     sidebar: {
       "/front-end/interview-questions/": [
@@ -37,5 +39,4 @@ export default defineConfig({
       provider: "local",
     },
   },
-  srcDir: "src",
 });
