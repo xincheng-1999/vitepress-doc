@@ -9,7 +9,7 @@ export default defineConfig({
   themeConfig: {
     // i18nRouting: true,
     siteTitle: "GXC の 笔记%%",
-    logo: "/logo.webp",
+    logo: "../logo.webp",
     // theme-level options
     sidebar: {
       "/front-end/interview-questions/": [
