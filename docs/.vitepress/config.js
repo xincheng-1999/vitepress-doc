@@ -20,6 +20,7 @@ export default defineConfig({
           items: [
             { text: "手写题", link: "/front-end/interview-questions/handwritten-code.md" },
             { text: "常见面试题", link: "/front-end/interview-questions/interview-questions.md" },
+            { text: "事件轮询 Event Loop", link: "/front-end/interview-questions/event-loop.md" },
           ],
         },
       ],
