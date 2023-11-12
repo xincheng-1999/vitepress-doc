@@ -20,7 +20,6 @@ export default defineConfig({
           items: [
             { text: "手写题", link: "/front-end/interview-questions/handwritten-code.md" },
             { text: "常见面试题", link: "/front-end/interview-questions/interview-questions.md" },
-            { text: "事件轮询 Event Loop", link: "/front-end/interview-questions/event-loop.md" },
           ],
         },
       ],
@@ -29,6 +28,10 @@ export default defineConfig({
           text: "Vue相关",
           items: [{ text: "reference", link: "/front-end/vue/" }],
         },
+      ],
+      "/front-end/the-basics": [
+        { text: "浏览器基础", items: [{ text: "重排重绘", link: "/front-end/the-basics/explorer-basics/reflow-repaint.md" }] },
+        { text: "JavaScript基础", items: [{ text: "事件轮询", link: "/front-end/the-basics/js-basics/event-loop.md" }] },
       ],
     },
     nav: [
@@ -39,6 +42,10 @@ export default defineConfig({
           {
             text: "Vue相关",
             link: "/front-end/vue/",
+          },
+          {
+            text: "前端基础",
+            link: "/front-end/the-basics/js-basics/event-loop.md",
           },
         ],
       },
