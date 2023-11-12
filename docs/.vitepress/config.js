@@ -3,14 +3,14 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   // site-level options
   title: "前端笔记文档",
-  description: "Just playing around.",
+  description: "记录个人的所见所得所感",
   lang: "zh",
   base: "/vitepress-doc/",
   srcDir: "src",
   head: [["link", { rel: "icon", href: "/favicon.ico" }]],
   themeConfig: {
     // i18nRouting: true,
-    siteTitle: "GXC の 笔记%%",
+    siteTitle: "GXC の 笔记",
     logo: "/logo.webp",
     // theme-level options
     sidebar: {
