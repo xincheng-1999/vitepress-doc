@@ -12,6 +12,7 @@ export default defineConfig({
     // i18nRouting: true,
     siteTitle: "GXC の 笔记",
     logo: "/logo.webp",
+    lastUpdated: true,
     // theme-level options
     sidebar: {
       "/front-end/interview-questions/": [
