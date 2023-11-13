@@ -7,7 +7,7 @@ export default defineConfig({
   lang: "zh",
   base: "/vitepress-doc/",
   srcDir: "src",
-  head: [["link", { rel: "icon", href: "/favicon.ico" }]],
+  head: [["link", { rel: "icon", href: "/vitepress-doc/favicon.ico" }]],
   themeConfig: {
     // i18nRouting: true,
     siteTitle: "GXC の 笔记",
