@@ -38,6 +38,7 @@ export default defineConfig({
         { text: "浏览器基础", items: [{ text: "重排重绘", link: "/front-end/the-basics/explorer-basics/reflow-repaint.md" }] },
         { text: "JavaScript基础", items: [{ text: "事件轮询", link: "/front-end/the-basics/js-basics/event-loop.md" }] },
         { text: "网络基础", items: [{ text: "http", link: "/front-end/the-basics/network-basics/http.md" }] },
+        { text: "TypeScript基础", items: [{ text: "TS装饰器", link: "/front-end/the-basics/ts-basics/decorator.md" }] },
       ],
       "/IT-technology": [
         {
