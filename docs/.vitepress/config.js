@@ -15,7 +15,7 @@ export default defineConfig({
     lastUpdated: true,
     footer: {
       message: 'Released under the <a href="https://github.com/xincheng-1999/vitepress-doc">MIT License</a>.',
-      copyright: 'Copyright © 2019-present <a href="https://github.com/xincheng-1999/vitepress-doc">GXC</a>',
+      copyright: 'Copyright © 2023-present <a href="https://github.com/xincheng-1999/vitepress-doc">GXC</a>',
     },
     // theme-level options
     sidebar: {
