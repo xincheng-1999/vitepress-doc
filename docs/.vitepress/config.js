@@ -53,6 +53,7 @@ export default defineConfig({
                 { text: "ideviceinstaller", link: "/IT-technology/Mac/ideviceinstaller.md" },
               ],
             },
+            { text: "Windows", items: [{ text: "Windows安装器 Chocolatey", link: "/IT-technology/Windows/Chocolatey.md" }] },
             { text: "adb", link: "/IT-technology/adb.md" },
             { text: "内网穿透", link: "/IT-technology/Intranet-penetration.md" },
           ],
