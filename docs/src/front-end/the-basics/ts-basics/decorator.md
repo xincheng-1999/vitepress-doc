@@ -92,8 +92,6 @@ console.log(obj)
 
 因此在类装饰器中不要拓展类和修改类
 
-
-
 ## 方法装饰器
 
 ```ts
@@ -121,20 +119,14 @@ const obj = new MyClass(8)
 console.log(obj.sayHi('你好'))
 ```
 
+上面方法装饰器，接受一个`target`原方法,和一个`context`上下文
 
-
-上面方法装饰器，接受一个`target`原方法,和一个context上下文，每次方法被调用时会调用装饰器返回的这个函数，并把对象this传递给第一个参数，其余参数通过剩余参数收集。
-
-
+每次方法被调用时会转向调用装饰器返回的这个函数，并把对象this传递给第一个参数，其余参数通过剩余参数收集，原函数不会被调用。
 
 通过这样的装饰器方法即可给所有的方法都加上打印
-
-
 
 > [TS Decotator](https://www.typescriptlang.org/docs/handbook/decorators.html#class-decorators)
 > 
 > [TS Playground](https://www.typescriptlang.org/play?target=6&ts=5.2.2#code/FAehAJG8fRRiMB0zAs1YAzArgOwMYBcCWB7NcAGzwHMAKDAgZywCcVs86AucLATwAcBTPJcAFkOAYSIBDatQA04ANY8ObMZOoARHlTriszEQSw8AHlgA8nXvyGiJUgHwBKcAG9g4cHR5YUdQhlvU4BpaOnoB4MaGaAAmgVRotAxMdC5u7uDimSxoKAC2AEY8dGnu8YmMunTkABY8OKTVWGw5BUUOrunp1Ci8VbX1jQ4l6WDggPfKgKdygMtGgKo6gHo6gOQGgGhGgJ2mgKs2w+5Y1TjUAHSZ4uAAvOAA7Jvgo5OzgB9ugM6KgMpGgA7Kl2V4RDx7JBQA5IDVEYA87UA0fKANGVAGFygBh-wBDyoAHUxYv1ke2R4jopDyPDQWGoQ06AF80gSCcBgAABH7AfyqawqKSpdz9BpNcAtQrFUo0egVZg1OpM5p5NntYbbXZ7RmNE7gCVYQlpUZUuk4XJcT65TFYHT4NBpajiDgACRw5HA8SizMSODQpGFnXEnzoWEoBg1uPARJJZSw4Dw+QAVlK0DwAO40gLkAAcQ3en2+ZHIvr9B0yDiAA)
 > 
 > [Announcing TypeScript 5.0 - TypeScript](https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#decorators)
-
-
