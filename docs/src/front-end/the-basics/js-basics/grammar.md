@@ -1,6 +1,6 @@
 # js 基础语法知识
 
-## this 指向问题
+## 普通 this 指向问题
 
 ### 存在 this 的地方
 
@@ -22,8 +22,6 @@
 
 :::
 
-
-
 ### Class 的 this
 
 `Class` 实际上是构造函数的语法糖，所以`Class`在`new`的过程中构造函数中的 this 都是指向实例
@@ -32,25 +30,24 @@
 
 ```js
 class Person {
-    constructor(){
-        this.name = 'jone'
-    }
+  constructor() {
+    this.name = "jone";
+  }
 }
-
 
 // 等价于
 function Persion() {
-    this.name = 'jone'
+  this.name = "jone";
 }
 ```
 
 - `Class`中的`this`始终指向类的`实例`
 
-- 构造函数new的时候等价于`Class`
+- 构造函数 new 的时候等价于`Class`
 
 - 构造函数被当做普通函数调用时，`this`指向构造函数的调用者
 
-### 严格模式、箭头函数共同对this的影响
+## 严格模式、箭头函数共同对 this 的影响
 
 **先上代码：**
 
@@ -66,14 +63,13 @@ class Person {
 
 const p = new Person("jobs");
 
-p.sayHi();  // [log]: My name is jobs
+p.sayHi(); // [log]: My name is jobs
 
-const obj = { sayHi: p.sayHi }; 
+const obj = { sayHi: p.sayHi };
 obj.sayHi(); // [log]: My name is undefined
 
 const fn = p.sayHi;
 fn(); // [err]: TypeError: Cannot read properties of undefined (reading 'name')
-
 ```
 
 上面代码声明了一个`Person`类，
@@ -111,7 +107,6 @@ obj.sayHi(); // [log]: My name is jobs
 
 const fn = p.sayHi;
 fn(); // [log]: My name is jobs
-
 ```
 
 上面的情况就是箭头函数导致的，由于箭头函数中没有自己的`this`所以获取的都是箭头函数上一层作用域的`this`，也就是构造函数中的`this`，始终指向实例`p`

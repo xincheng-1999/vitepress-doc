@@ -71,6 +71,7 @@ export default defineConfig({
             { text: "Windows", items: [{ text: "Windows安装器 Chocolatey", link: "/IT-technology/Windows/Chocolatey.md" }] },
             { text: "adb", link: "/IT-technology/adb.md" },
             { text: "内网穿透", link: "/IT-technology/Intranet-penetration.md" },
+            { text: "Git", link: "/IT-technology/git.md" },
           ],
         },
       ],
