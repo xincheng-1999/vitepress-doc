@@ -46,6 +46,15 @@ export default defineConfig({
         { text: "网络基础", items: [{ text: "http", link: "/front-end/the-basics/network-basics/http.md" }] },
         { text: "TypeScript基础", items: [{ text: "TS装饰器", link: "/front-end/the-basics/ts-basics/decorator.md" }] },
       ],
+      "/front-end/nodejs/": [
+        {
+          text: "Nodejs",
+          items: [
+            { text: "nvm", link: "/front-end/nodejs/nvm.md" },
+            { text: "包管理", link: "/front-end/nodejs/package-management.md" },
+          ],
+        },
+      ],
       "/IT-technology": [
         {
           text: "IT 基础知识收集",
@@ -78,6 +87,10 @@ export default defineConfig({
           {
             text: "前端基础",
             link: "/front-end/the-basics/js-basics/event-loop.md",
+          },
+          {
+            text: "node",
+            link: "/front-end/nodejs/nvm.md",
           },
         ],
       },
