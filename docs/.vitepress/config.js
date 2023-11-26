@@ -43,7 +43,13 @@ export default defineConfig({
             { text: "js基础语法知识", link: "/front-end/the-basics/js-basics/grammar.md" },
           ],
         },
-        { text: "网络基础", items: [{ text: "http", link: "/front-end/the-basics/network-basics/http.md" }] },
+        {
+          text: "网络基础",
+          items: [
+            { text: "http", link: "/front-end/the-basics/network-basics/http.md" },
+            { text: "web安全", link: "/front-end/the-basics/network-basics/webSafety.md" },
+          ],
+        },
         { text: "TypeScript基础", items: [{ text: "TS装饰器", link: "/front-end/the-basics/ts-basics/decorator.md" }] },
       ],
       "/front-end/nodejs/": [
