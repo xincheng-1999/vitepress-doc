@@ -22,18 +22,20 @@ function create() {
 ## 手写 call、bind、apply
 
 ```javascript
-Function.prototype.myCall = function (context) {
-  var context = context || window;
-  // 给 context 添加⼀个属性
-  // getValue.call(a, 'yck', '24') => a.fn = getValue
-  context.fn = this;
-  // 将 context 后⾯的参数取出来
-  var args = [...arguments].slice(1);
-  // getValue.call(a, 'yck', '24') => a.fn('yck', '24')
-  var result = context.fn(...args);
-  // 删除 fn
-  delete context.fn;
-  return result;
+Function.prototype.myCall = function (...arg) {
+  // 调用myCall的函数
+  const fn = this;
+  // 需要绑定的this对象
+  const targetThis = arg[0];
+  // 不可枚举，这样外面就看不到对象被设置的值
+  Object.defineProperty(targetThis, "fn", {
+    value: fn,
+    configurable: true,
+  });
+  const res = targetThis.fn(arg.slice(1));
+  // 调用完了立马删除
+  delete targetThis.fn;
+  return res;
 };
 ```
 
