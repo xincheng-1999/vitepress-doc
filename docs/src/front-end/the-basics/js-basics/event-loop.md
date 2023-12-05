@@ -12,7 +12,7 @@ js 是单线程，同步代码的优先级最高，其次是微任务（MicroTas
 
 - Promise 回调： 当一个 Promise 被 resolved 或 rejected 时，与之关联的回调函数会成为微任务。
 
-- MutationObserver： 当 DOM 结构发生变化时，通过 MutationObserver 监听的回调会被放入微任务队列。
+- [MutationObserver](https://developer.mozilla.org/zh-CN/docs/Web/API/MutationObserver)： 当 DOM 结构发生变化时，通过 MutationObserver 监听的回调会被放入微任务队列。
 
 - process.nextTick（Node.js 环境）： 在 Node.js 中，process.nextTick 也被认为是微任务。
 
@@ -22,9 +22,11 @@ js 是单线程，同步代码的优先级最高，其次是微任务（MicroTas
 
 - setTimeout 和 setInterval： 设置定时器的回调函数会成为宏任务。
 
+- [IntersectionObserver ](https://developer.mozilla.org/zh-CN/docs/Web/API/IntersectionObserver)，观察元素交叉的监听器，回调是宏任务
+
 - I/O 操作： 文件读写、网络请求等 I/O 操作的回调函数通常是宏任务。
 
-- 用户交互事件： 如点击事件、鼠标事件等，其回调函数也是宏任务。
+- 用户交互事件： 如点击事件、~~鼠~~标事件等，其回调函数也是宏任务。
 
 - MessageChannel： 通过 MessageChannel 创建的任务会成为宏任务。
 
