@@ -1,5 +1,35 @@
 :root {
-  --vp-c-brand-1: rgb(255, 174, 0);
-  --vp-c-brand-2: #dacb00;
-  --vp-c-text-1: rgb(154, 105, 0);
+  --vp-c-gray-1: #d1d1d1;
+  --vp-c-gray-2: #a8a8a8;
+  --vp-c-gray-3: #808080;
+  --vp-c-gray-soft: rgba(150, 150, 150, 0.14);
+
+  --vp-c-indigo-1: #f06292;
+  --vp-c-indigo-2: #ec407a;
+  --vp-c-indigo-3: #d81b60;
+  --vp-c-indigo-soft: rgba(240, 98, 146, 0.16);
+  
+
+  --vp-c-green-1: #2e7d32;
+  --vp-c-green-2: #43a047;
+  --vp-c-green-3: #4caf50;
+  --vp-c-green-soft: rgba(76, 175, 80, 0.14);
+
+  --vp-c-yellow-1: #ffca28;
+  --vp-c-yellow-2: #ffd54f;
+  --vp-c-yellow-3: #ffeb3b;
+  --vp-c-yellow-soft: rgba(255, 235, 59, 0.14);
+
+  --vp-c-red-1: #ef5350;
+  --vp-c-red-2: #e57373;
+  --vp-c-red-3: #ef9a9a;
+  --vp-c-red-soft: rgba(255, 112, 112, 0.14);
+
+  --vp-c-sponsor: #f48fb1;
+
+
+  --vp-c-text-1: rgba(102, 45, 71);
+  --vp-c-text-2: rgba(102, 45, 71, 0.78);
+  --vp-c-text-3: rgba(102, 45, 71, 0.56);
 }
+
