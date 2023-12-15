@@ -8,7 +8,7 @@
 
 [Proxy](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Proxy)是ES6新增的内置对象，它的功能和名字一样，就是为了代理，它可以代理一个普通对象，生成一个代理对象，其功能远比Object.defineProperty强大，比如：
 
-```
+```javascript
 const obj = {name: '小李'}
 const proxy =  new Proxy(obj, {}) // 这里的handlers给个空对象，那么这个代理的所有操作都会和源对象obj同步
 ```
@@ -17,7 +17,7 @@ const proxy =  new Proxy(obj, {}) // 这里的handlers给个空对象，那么�
 
 `handlers`是[Proxy](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Proxy)的重点部分，可以通过各种`handler`（陷阱）来对用户操作做出一系列的操作，最简单的即是`get陷阱`：
 
-```
+```javascript
 const obj = {name: '小李'}
 const proxy =  new Proxy(obj, {
   get(target, key, receiver){
@@ -61,7 +61,7 @@ handler接收三个参数
 
 前两个就是最普通的对象获取方法，容易理解，这时`receiver`就是代理对象`proxy`
 
-```
+```javascript
 const obj = {name: '小李'}
 const proxy =  new Proxy(obj, {
   get(target, key, receiver){
@@ -73,7 +73,7 @@ const proxy =  new Proxy(obj, {
 
 如果对于以下代码就不对劲了
 
-```
+```javascript
 const obj = { name: "小李" };
 
 Object.defineProperty(obj, "fullName", {
@@ -103,7 +103,7 @@ console.log(newObj.fullName); // 小李
 
 这时就需要Reflect登场了
 
-```
+```java
 ...
 const proxy = new Proxy(obj, {
   get(target, key, receiver) {
