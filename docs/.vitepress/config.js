@@ -41,6 +41,7 @@ export default defineConfig({
           items: [
             { text: "事件轮询", link: "/front-end/the-basics/js-basics/event-loop.md" },
             { text: "js基础语法知识", link: "/front-end/the-basics/js-basics/grammar.md" },
+            { text: "Proxy和它的好基友Reflect", link: "/front-end/the-basics/js-basics/proxy.md" },
           ],
         },
         {
