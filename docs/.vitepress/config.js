@@ -82,6 +82,12 @@ export default defineConfig({
           ],
         },
       ],
+      "/Reading-feelings": [
+        {
+          text: "读书笔记",
+          items: [{ text: "自学 —— 一门手艺", link: "/Reading-feelings/self-teaching.md" }],
+        },
+      ],
     },
     nav: [
       {
@@ -105,6 +111,10 @@ export default defineConfig({
       {
         text: "IT基础收集",
         link: "/IT-technology/net-proxy.md",
+      },
+      {
+        text: "读书",
+        link: "/Reading-feelings/self-teaching.md",
       },
     ],
     search: {
