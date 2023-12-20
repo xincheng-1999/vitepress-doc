@@ -15,6 +15,9 @@ hero:
     - theme: alt
       text: View on GitHub
       link: https://github.com/xincheng-1999/vitepress-doc
+    - theme: brand
+      text: 前端学习路线
+      link: https://roadmap.sh/frontend
 
 features:
   - icon: 🛠️
