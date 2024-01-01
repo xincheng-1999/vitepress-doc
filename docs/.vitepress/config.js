@@ -39,6 +39,7 @@ export default defineConfig({
         {
           text: "JavaScript基础",
           items: [
+            { text: "原型链", link: "/front-end/the-basics/js-basics/prototype.md" },
             { text: "事件轮询", link: "/front-end/the-basics/js-basics/event-loop.md" },
             { text: "js基础语法知识", link: "/front-end/the-basics/js-basics/grammar.md" },
             { text: "Proxy和它的好基友Reflect", link: "/front-end/the-basics/js-basics/proxy.md" },

@@ -93,3 +93,33 @@ function deepClone(obj, tempMap = new Map()) {
   }
 }
 ```
+
+## 数组去重
+
+### ES5
+
+```javascript
+function uniqArr(arr) {
+  return arr.filter(function (item, index) {
+    return arr.indexOf(item) === index;
+  });
+}
+```
+
+### ES6
+
+```javascript
+function uniqArr(arr) {
+  return [...new Set(arr)];
+}
+```
+
+## 数组拍平
+
+```javascript
+Array.prototype.myFlat = function (depth = 1) {
+  return this.reduce((acc, val) => {
+    return acc.concat(Array.isArray(val) && depth > 1 ? val.myFlat(depth - 1) : val);
+  }, []);
+};
+```
