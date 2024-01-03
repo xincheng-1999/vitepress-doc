@@ -31,7 +31,7 @@ export default defineConfig({
       "/front-end/vue/": [
         {
           text: "Vue相关",
-          items: [{ text: "reference", link: "/front-end/vue/" }],
+          items: [{ text: "reference", link: "/front-end/vue/index.md" }],
         },
       ],
       "/front-end/the-basics": [
@@ -97,7 +97,7 @@ export default defineConfig({
           { text: "面试题", link: "/front-end/interview-questions/handwritten-code.md" },
           {
             text: "Vue相关",
-            link: "/front-end/vue/",
+            link: "/front-end/vue/index.md",
           },
           {
             text: "前端基础",
