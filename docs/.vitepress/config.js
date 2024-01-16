@@ -30,8 +30,12 @@ export default defineConfig({
       ],
       "/front-end/vue/": [
         {
-          text: "Vue相关",
-          items: [{ text: "reference", link: "/front-end/vue/index.md" }],
+          text: "Vue主体",
+          items: [{ text: "Vue2主要逻辑", link: "/front-end/vue/index.md" }],
+        },
+        {
+          text: "Vue生态",
+          items: [{ text: "VueRouter", link: "/front-end/vue/vue-router.md" }],
         },
       ],
       "/front-end/the-basics": [
