@@ -25,6 +25,7 @@ export default defineConfig({
           items: [
             { text: "手写题", link: "/front-end/interview-questions/handwritten-code.md" },
             { text: "常见面试题", link: "/front-end/interview-questions/interview-questions.md" },
+            { text: "Vue面试题100问", link: "/front-end/interview-questions/vue-questions.md" },
           ],
         },
       ],
