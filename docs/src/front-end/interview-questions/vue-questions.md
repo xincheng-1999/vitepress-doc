@@ -1565,9 +1565,9 @@ quill-editor 的 Vue 版本，vue-quill-editor，功能一般，配置简单：[
 
 比如有父组件 Parent 和子组件 Child，如果父组件监听到子组件挂载 mounted 就做一些逻辑处理，可以通过以下写法实现：
 
-以上需要手动通过 $emit 触发父组件的事件，更简单的方式可以在父组件引用子组件时通过 [@hook](/hook) 来监听即可，如下所示：
+以上需要手动通过 $emit 触发父组件的事件，更简单的方式可以在父组件引用子组件时通过 @mounted 来监听即可，如下所示：
 
-当然 [@hook](/hook) 方法不仅仅是可以监听 mounted，其它的生命周期事件，例如：created，updated 等都可以监听。
+当然 @mounted 方法不仅仅是可以监听 mounted，其它的生命周期事件，例如：created，updated 等都可以监听。
 
 ```
 // Parent.vue
