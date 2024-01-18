@@ -495,7 +495,7 @@ static 和 assets 的区别，原理就在于**webpack 是如何处理静态资�
 - assets
 
 - 在 vue 组件中，所有模板和 css 都会被 vue-html-loader 和 css-loader 解析，并查找资源 url。  
-  例：![](./logo.png)   或者  background: url("./logo.png")　　因为./logo.png 是相对的资源路径，将会由 webpack 解析为模块依赖；
+  例：(./logo.png)   或者  background: url("./logo.png")　　因为./logo.png 是相对的资源路径，将会由 webpack 解析为模块依赖；
 
 - 由于 logo.png 不是 js，当被视作模块依赖时，需要使用 url-loader 和 file-loader 处理它，vue-cli 已经配好了这些 loader（webpack）因此可以使用相对/模块路径。
 
