@@ -32,3 +32,19 @@
 > 除此之外常见的预加载可以用在字体等
 
 > 对于 link 标签的 rel 和 href 属性常用在加载 css 资源，`rel=stylesheet`但是在 rel="preload"的时候即变为预加载器，详见[MDN 预加载](https://developer.mozilla.org/zh-CN/docs/Web/HTML/Attributes/rel/preload)
+
+### 2. 预连接
+
+在网络比较慢的时候建立 https 连接是比较耗时的，其会经过 DNS 解析、重定向、三次握手过程等，如果能够提前建立连接，就可以加快 http 请求的访问，从而提高用户体验。
+
+预连接：
+
+```html
+<link ref="preconnect" href="https://juejin.cn/" />
+```
+
+> 优点：预连接能够使后续响应更快
+>
+> 缺点：如果超过 10 秒没有网络请求连接就会断开，此时就造成了网络资源和服务器资源的浪费。
+
+此外，和 http 预连接相似还有 DNS 预解析，它仅用来 dns 查询，并且能够缩短 DNS 查询时间：`<link ref="dns-prefetch">`
