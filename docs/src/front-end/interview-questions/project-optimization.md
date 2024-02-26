@@ -90,4 +90,59 @@ window.onscroll = lozyLoad();
 
 #### 3. ES6 图片懒加载实现：intersectionObserver
 
-传统方法是通过滚动事件反复计算图片相对视口位置，性能消耗较大，使用[intersectionObserver](https://www.yuque.com/u25317811/tsotte/wv2iq63ep02sv0wb)只需要对图片进行监听，当图片进入视口时会通过监听回调触发后续的操作，大大减少了函数调用的次数减少了性能消耗
+传统方法是通过滚动事件反复计算图片相对视口位置，性能消耗较大，使用[intersectionObserver](https://www.yuque.com/u25317811/tsotte/wv2iq63ep02sv0wb)只需要对图片进行监听，当图片进入视口时会通过监听回调触发后续的操作，大大减少了函数调用的次数减少了性能消耗。以下是具体实现：
+
+```js
+document.addEventListener("DOMContentLoaded", () => {
+  const imgs = document.querySelectorAll("img");
+  imgs.forEach((img, index) => {
+    let options = {
+      root: document.querySelector(".box"), // 用于监听的根节点
+      rootMargin: "0px", // 根元素扩大或者收缩的范围，正数扩大，比如根元素是 100*100px，rootMargin为10px，比较的就是120&120
+      threshold: 0, // 0~1,0时表示目标完全离开root，1表示目标刚开始离开root就出发回调
+    };
+
+    // 当目标满足相交的条件，回调就会触发
+    let callback = (entries, observer) => {
+      entries.forEach((entry) => {
+        // Each entry describes an intersection change for one observed target element:
+        // entry.boundingClientRect
+        // entry.intersectionRatio  比例，重合部分的比例，0~1之间
+        // entry.intersectionRect
+        // entry.isIntersecting
+        // entry.rootBounds
+        // entry.target
+        // entry.time
+        console.log(entry.intersectionRatio);
+        if (entry.intersectionRatio > 0) {
+          console.log(entry.target);
+          entry.target.src = entry.target.dataset.src;
+        }
+      });
+    };
+
+    let observer = new IntersectionObserver(callback, options);
+
+    // 创建监听
+    observer.observe(img);
+  });
+});
+```
+
+### ⅣⅤⅢ. 首屏加载优化
+
+背景：
+
+随着 Vue、React 等框架的盛行，SPA 单页面应用越来越多，多数的 SPA 应用的结构都很类似。由于 SPA 页面打包之后的 JavaScript 文件很大，等这个巨大的 JavaScript 文件加载完之后，首屏才能渲染，这就导致出现了白屏的问题。在移动端，一些需要快速迭代的开发项目都是使用 HTML5 开发的，同样首屏加载白屏问题非常的严重。目前一些首页加载优化方案有：
+
+#### 1. 骨架屏
+
+#### 2. 资源预加载
+
+#### 3. 路由懒加载
+
+#### 4. 组件懒加载
+
+#### 5. CDN（内容分发网络）
+
+#### 6. webpack 分包 splitChunks
