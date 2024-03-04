@@ -4,7 +4,7 @@
 
 常用命令：
 
-```
+```sh
 choco upgrade chocolatey # 更新自身
 
 choco search  # xxx，查找 xxx 安装包
@@ -14,5 +14,3 @@ choco upgrade # xxx，升级 xxx 软件
 choco uninstall # xxx， 卸载 xxx 软件
 
 ```
-
-

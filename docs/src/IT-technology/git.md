@@ -1,6 +1,6 @@
 # Git
 
-Husky的使用：[前端项目中使用husky做预检查 - 简书](https://www.jianshu.com/p/e1529a313e8b?utm_campaign=studygolang.com&utm_medium=studygolang.com&utm_source=studygolang.com)
+Husky 的使用：[前端项目中使用 husky 做预检查 - 简书](https://www.jianshu.com/p/e1529a313e8b?utm_campaign=studygolang.com&utm_medium=studygolang.com&utm_source=studygolang.com)
 
 # 常用命令
 
@@ -8,15 +8,15 @@ Husky的使用：[前端项目中使用husky做预检查 - 简书](https://www.j
 
 - git config --global user.name "name"
 - git config --global user.email "email"
-- git config --list 查看.gitconfig配置
+- git config --list 查看.gitconfig 配置
 
-```
+```sh
 git config --global alias.cm "commit -m" # 给命令配别名 如此commit即可git cm 'message'
 ```
 
 ## 2. 分支操作
 
-```
+```shell
 git branch # 查看当前所在分支
 
 git branch -r # 列出所有远程分支
@@ -48,7 +48,7 @@ git branch -M <oldname> <newname> # 强制重命名
 
 ## 3. 基础操作
 
-```
+```sh
 git add <filename> # 暂存
 
 git commit -m "meaasge" # 提交
@@ -78,7 +78,7 @@ git show <commithash> # 查看某次更改对比
 
 ## 4. 远程操作
 
-```
+```sh
 git remote # 查看远程仓库名，一般为origin
 
 git remote -v # 查看远程仓库地址
@@ -94,10 +94,11 @@ git push origin --tags # 把tag同步到远程
 git push origin tag_name # 把指定tag名同步到远程
 ```
 
-## 5.配置ssh公钥
+## 5.配置 ssh 公钥
 
-用以下命令生成ssh公钥和私钥，把公钥丢到远程账号下的ssh就好
+用以下命令生成 ssh 公钥和私钥，把公钥丢到远程账号下的 ssh 就好
 
-```
-ssh-keygen -t rsa -C "你的邮箱" 
+```sh
+ssh-keygen -t rsa -C "你的邮箱" # rsa算法目前不被最新的git接受
+ssh-keygen -t ed25519 -C "xxx@xx.com" # 建议使用ed25519算法
 ```
