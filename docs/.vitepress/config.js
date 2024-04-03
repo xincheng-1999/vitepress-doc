@@ -95,6 +95,12 @@ export default defineConfig({
           items: [{ text: "自学 —— 一门手艺", link: "/Reading-feelings/self-teaching.md" }],
         },
       ],
+      "/front-end/react": [
+        {
+          text: "react",
+          items: [{ text: "redux —— 状态管理器", link: "/front-end/react/redux.md" }],
+        },
+      ],
     },
     nav: [
       {
@@ -104,6 +110,10 @@ export default defineConfig({
           {
             text: "Vue相关",
             link: "/front-end/vue/index.md",
+          },
+          {
+            text: "React相关",
+            link: "/front-end/react/redux.md",
           },
           {
             text: "前端基础",
