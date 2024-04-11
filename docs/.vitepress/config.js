@@ -98,7 +98,10 @@ export default defineConfig({
       "/front-end/react": [
         {
           text: "react",
-          items: [{ text: "redux —— 状态管理器", link: "/front-end/react/redux.md" }],
+          items: [
+            { text: "react 基础", link: "/front-end/react/index.md" },
+            { text: "redux —— 状态管理器", link: "/front-end/react/redux.md" },
+          ],
         },
       ],
     },
