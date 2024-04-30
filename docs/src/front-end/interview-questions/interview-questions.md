@@ -282,7 +282,7 @@ interface：
 - loader 是文件加载器，能够加载资源文件，并对这些文件进行一些处理，诸如编译、压缩等，最终一起打包到指定的文件中
 
 - plugin 赋予了 webpack 各种灵活的功能，例如打包优化、资源管理、环境变量注入等，目的是解决 loader 无法实现的其他事
-  
+
   > 参考[https://vue3js.cn/interview/webpack/Loader_Plugin.html](https://vue3js.cn/interview/webpack/Loader_Plugin.html)
 
 ## 深拷贝浅拷贝
@@ -316,3 +316,39 @@ ES6 最新 api，兼容性非常差不过有 polyfill
 #### 手写递归深拷贝
 
 [常见手写题](/front-end/interview-questions/handwritten-code.html#%E6%B7%B1%E6%8B%B7%E8%B4%9D)
+
+## CSS 中 伪类 和 伪元素 的区别
+
+### 主要区别
+
+伪类： 应用于元素的特定状态
+
+伪元素：应用于元素中的虚拟元素
+
+常见伪类：
+
+- :hover
+- :active
+- :focus
+- :link
+- :visited
+- :first-child
+- :last-child
+- :nth-child(n)
+- :nth-last-child(n)
+- :nth-of-type(n)
+- :nth-last-of-type(n)
+- :first-of-type
+- :last-of-type
+- :only-child
+
+常见伪元素：
+
+- ::before
+- ::after
+- ::first-line
+- ::first-letter
+- ::selection
+- ::placeholder
+- ::empty
+- ::root
