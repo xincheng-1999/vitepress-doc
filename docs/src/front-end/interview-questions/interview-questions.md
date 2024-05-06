@@ -153,8 +153,6 @@ http2 相较于 http1.1 的优势：
 
 ## script 标签中 defer 和 async
 
-![图片](../../assets/defer.png)
-
 - 最普通的 script 标签，一切都会同步执行，加载到 script 标签之后会等待 script 资源加载完成并执行完成才会加载后面的 DOM
 
 ![](../../assets/script-none.jpeg)
