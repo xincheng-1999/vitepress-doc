@@ -4,14 +4,12 @@
 
 ```javascript
 function create() {
-  // 创建⼀个空的对象
-  let obj = new Object();
   // 获得构造函数
   let Con = [].shift.call(arguments);
   // 链接到原型
   //obj.__proto__ = Con.prototype
   //采用Object.creact()方法创建原型链
-  const obj = Object.creact(Con);
+  const obj = Object.create(Con.prototype);
   // 绑定 this，执⾏构造函数
   let result = Con.apply(obj, arguments);
   // 确保 new 出来的是个对象 如果构造函数返回对象就是生成这个对象，否则返回obj
