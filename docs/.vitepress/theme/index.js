@@ -9,9 +9,11 @@ export default {
       loadOml2d({
         models: [
           {
-            path: 'https://model.oml2d.com/HK416-1-normal/model.json'
+            path: 'https://model.oml2d.com/HK416-1-normal/model.json',
+            scale: 0.08
           }
-        ]
+        ],
+        dockedPosition: 'right'
       });
     }
   }
