@@ -6,7 +6,7 @@ hero:
   text: Front-end & IT technology.
   tagline: Lorem ipsum...
   image:
-    src: /logo.png
+    src: /Ironman.png
     alt: VitePress
   actions:
     - theme: brand
