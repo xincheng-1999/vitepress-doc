@@ -14,3 +14,12 @@ choco upgrade # xxx，升级 xxx 软件
 choco uninstall # xxx， 卸载 xxx 软件
 
 ```
+
+```sh
+# 备份软件列表  获得到一个 packages.config 文件，是xml类型
+choco export --output-file-path="'d:\packages.config'" --include-version-numbers
+
+# 安装软件列表
+choco install packages.config
+```
+

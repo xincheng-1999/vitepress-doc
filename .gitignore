@@ -3,3 +3,4 @@ cache
 dist
 
 docs/.vitepress/dist/
+helper.json
