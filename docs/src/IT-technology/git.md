@@ -102,3 +102,19 @@ git push origin tag_name # 把指定tag名同步到远程
 ssh-keygen -t rsa -C "你的邮箱" # rsa算法目前不被最新的git接受
 ssh-keygen -t ed25519 -C "xxx@xx.com" # 建议使用ed25519算法
 ```
+
+## 6. 扩展功能
+### 1. worktree功能
+作用： 开发过程中需要切到其他分支不想影响当前分支，增加效率，就可以新增一个worktree
+
+```bash
+# 创建一个新的工作区，用于 hotfix 分支
+git worktree add ../hotfix-path hotfix
+
+# 现在你可以在 hotfix-path 目录中修复bug
+cd ../hotfix-path
+
+# 修复bug后，切换回 dev 分支的工作区
+cd - # 返回到原始工作区
+git worktree remove ../hotfix-path # 完成后删除 hotfix 工作区
+```
