@@ -117,4 +117,6 @@ cd ../hotfix-path
 # 修复bug后，切换回 dev 分支的工作区
 cd - # 返回到原始工作区
 git worktree remove ../hotfix-path # 完成后删除 hotfix 工作区
+
+git worktree list # 查看所有工作区
 ```
