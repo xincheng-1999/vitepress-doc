@@ -104,6 +104,13 @@ export default defineConfig({
           ],
         },
       ],
+      "/back-end/java": {
+        text: "Java",
+        items: [
+          { text: "Java基础", link: "/back-end/java/java-basic.md" },
+          { text: "Java进阶", link: "/back-end/java/java-advanced.md" },
+        ],
+      }
     },
     nav: [
       {
@@ -136,6 +143,15 @@ export default defineConfig({
         text: "读书",
         link: "/Reading-feelings/self-teaching.md",
       },
+      {
+        text: "后端",
+        items: [
+          {
+            text: "Java",
+            link: "/back-end/java/java-basic.md",
+          },
+        ],
+      }
     ],
     search: {
       provider: "local",
