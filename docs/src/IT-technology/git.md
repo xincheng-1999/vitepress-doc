@@ -89,6 +89,10 @@ git remote rm origin # 移除远程仓库
 
 git remote update origin --prune # 同步远程分支信息
 
+git tag <tag_name> # 创建标签
+
+git tag -a <tag_name> -m "tag message" # 添加带注释的标签
+
 git push origin --tags # 把tag同步到远程
 
 git push origin tag_name # 把指定tag名同步到远程
