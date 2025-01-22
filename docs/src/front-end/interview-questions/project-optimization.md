@@ -129,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 ```
 
-### ⅣⅤⅢ. 首屏加载优化
+### Ⅲ. 首屏加载优化
 
 背景：
 

@@ -31,6 +31,47 @@ features:
     details: Lorem ipsum...
 ---
 
+<script setup>
+  import { gsap } from "gsap";
+  import { onMounted, onBeforeUnmount } from 'vue'
+  let interval = -1
+  onMounted(() => {
+    console.log('mounted')
+    const img = document.querySelector('.image-src')
+    img.addEventListener('mouseenter', () => {
+      gsap.to(img, {
+        scale:  2,
+        duration: 0.2,
+      })
+    })
+    img.addEventListener('mouseleave', () => {
+      gsap.to(img, {
+        scale:  1,
+        duration: 0.2,
+      })
+    })
+      
+    // let direction = 1
+    // interval = setInterval(() => {
+    //   gsap.to(".image-src", {
+    //     // this is the vars object
+    //     // it contains properties to animate
+    //     x: 20 * direction,
+    //     // scale:  2,
+    //     // rotation: 360,
+    //     // and special properties
+    //     duration: 0.2,
+    //   })
+    //   direction *= -1
+    // }, 200)
+    
+  })
+  onBeforeUnmount(() => {
+    clearInterval(interval)
+  })
+  
+</script>
+
 <style>
 
   :root {
