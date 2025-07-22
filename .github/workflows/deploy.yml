@@ -1,42 +1,55 @@
 name: Deploy
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
-
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v3
+      # 1. 檢出主分支最新內容
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          ref: main # 指定要检出的分支
+          ref: main
           fetch-depth: 0
+      # 2. 安裝 pnpm
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
         with:
           version: 9.7.1
-      - uses: actions/setup-node@v3
+      # 3. 設定 Node.js 並啟用 pnpm 快取
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build
+      # 4. 安裝依賴
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # 5. 建構 VitePress 靜態網站
+      - name: Build VitePress site
         run: pnpm docs:build
-      - uses: actions/configure-pages@v2
-      - uses: actions/upload-pages-artifact@v1
+      # 6. 設定 GitHub Pages
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v3
+      # 7. 上傳產生的靜態檔案
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v2
         with:
           path: docs/.vitepress/dist
-      - name: Deploy
+      # 8. 部署到 gh-pages 分支
+      - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v3
         with:
           branch: gh-pages
           folder: docs/.vitepress/dist
