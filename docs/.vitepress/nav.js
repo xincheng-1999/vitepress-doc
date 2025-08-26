@@ -18,4 +18,5 @@ export default [
       { text: "Python", link: "/python-study/python-basic.md" },
     ],
   },
+  { text: 'Rust', link: '/rust-study/rust-basic.md' },
 ];

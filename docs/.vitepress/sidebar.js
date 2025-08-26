@@ -98,4 +98,11 @@ export default {
         { text: "Python版本管理器 pyenv", link: "/python-study/pyenv.md" },
     ],
   },
+  "/rust-study": {
+    text: "Rust",
+    items: [
+        { text: "Rust基础", link: "/rust-study/rust-basic.md" },
+        { text: "Rust进阶", link: "/rust-study/rust-advanced.md" },
+    ],
+  },
 };
