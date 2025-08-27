@@ -10,6 +10,7 @@ export default {
         models: [
           {
             path: [
+              'https://model.oml2d.com/senko_normals/senko.model3.json',
               'https://cdn.jsdelivr.net/gh/Eikanya/Live2d-model/Live2D/Senko_Normals/senko.model3.json',
               'https://model.oml2d.com/HK416-2-normal/model.json',
               'https://model.oml2d.com/HK416-2-destroy/model.json',
