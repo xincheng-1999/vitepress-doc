@@ -2,12 +2,12 @@ import DefaultTheme from "vitepress/theme";
 import "./custom.css";
 
 const modelPaths = [
-  new URL('./models/HK416-1-normal/model.json', import.meta.url).href,
-  new URL('./models/HK416-2-destroy/model.json', import.meta.url).href,
-  new URL('./models/HK416-2-normal/model.json', import.meta.url).href,
-  new URL('./models/Kar98k-normal/model.json', import.meta.url).href,
-  new URL('./models/kp31/model.json', import.meta.url).href,
-  new URL('./models/rem/model.json', import.meta.url).href,
+  'https://xincheng-1999.github.io/vitepress-doc/models/HK416-1-normal/model.json',
+  'https://xincheng-1999.github.io/vitepress-doc/models/HK416-2-destroy/model.json',
+  'https://xincheng-1999.github.io/vitepress-doc/models/HK416-2-normal/model.json',
+  'https://xincheng-1999.github.io/vitepress-doc/models/Kar98k-normal/model.json',
+  'https://xincheng-1999.github.io/vitepress-doc/models/kp31/model.json',
+  'https://xincheng-1999.github.io/vitepress-doc/models/rem/model.json',
 ];
 
 export default {
