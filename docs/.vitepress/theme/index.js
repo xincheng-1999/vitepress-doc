@@ -10,9 +10,9 @@ export default {
         models: [
           {
             path: [
-              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.model.json'
-              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.physics.json'
-              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.pose.json'
+              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.model.json',
+              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.physics.json',
+              'https://unpkg.com/live2d-widget-model-shizuku@latest/assets/shizuku.pose.json',
               'https://unpkg.com/live2d-widget-model-miku@latest/assets/miku.model.json',
               'https://model.oml2d.com/senko_normals/senko.model3.json',
               'https://cdn.jsdelivr.net/gh/Eikanya/Live2d-model/Live2D/Senko_Normals/senko.model3.json',
