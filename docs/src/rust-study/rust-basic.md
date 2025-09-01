@@ -220,4 +220,7 @@ Cargo.lock 是由 Cargo 自动生成的文件，用于锁定项目依赖项的�
         └── test_module.rs
 ```
 
+#### 官方仓库镜像地址
+https://crates.io/
+
 https://course.rs/first-try/hello-world.html
