@@ -16,6 +16,7 @@ export default [
     items: [
       { text: "Java", link: "/back-end/java/java-basic.md" },
       { text: "Python", link: "/python-study/python-basic.md" },
+      { text: "数据库", link: "/back-end/database/index.md" },
     ],
   },
   { text: 'Rust', link: '/rust-study/rust-basic.md' },
