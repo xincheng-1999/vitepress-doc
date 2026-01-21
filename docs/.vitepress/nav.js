@@ -9,6 +9,7 @@ export default [
       { text: "node", link: "/front-end/nodejs/nvm.md" },
     ],
   },
+  { text: "大模型", link: "/llm-study/index.md" },
   { text: "IT基础收集", link: "/IT-technology/net-proxy.md" },
   { text: "读书", link: "/Reading-feelings/self-teaching.md" },
   {

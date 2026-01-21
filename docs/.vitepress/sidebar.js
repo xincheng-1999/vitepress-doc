@@ -158,4 +158,21 @@ export default {
         { text: "Rust进阶", link: "/rust-study/rust-advanced.md" },
     ],
   },
+  "/llm-study/": [
+    {
+      text: "大模型学习",
+      items: [
+        { text: "学习路线", link: "/llm-study/index.md" },
+        { text: "学习环境与安装（Windows）", link: "/llm-study/environment.md" },
+        { text: "从 Token 到上下文窗口", link: "/llm-study/intro.md" },
+        { text: "Transformer 速通", link: "/llm-study/transformer.md" },
+        { text: "Prompt 工程", link: "/llm-study/prompting.md" },
+        { text: "RAG 实战要点", link: "/llm-study/rag.md" },
+        { text: "微调与对齐", link: "/llm-study/fine-tuning.md" },
+        { text: "评测", link: "/llm-study/evaluation.md" },
+        { text: "部署与性能", link: "/llm-study/deployment.md" },
+        { text: "安全", link: "/llm-study/safety.md" },
+      ],
+    },
+  ],
 };
