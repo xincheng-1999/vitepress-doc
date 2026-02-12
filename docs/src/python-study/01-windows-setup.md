@@ -5,7 +5,8 @@
 > 原理补充：Python 的依赖是“按环境隔离”的；在 Windows 上最容易踩坑的是把全局 Python、系统 PATH、不同项目依赖混在一起。`venv` 的核心价值就是把每个项目的解释器与依赖锁在项目内。
 
 ## 0) 你应该先知道的两件事
-- 你在终端里看到的 `python` 不一定是你“想要的那个 Python”。Windows 上更稳的入口通常是 `py`（Python Launcher）。
+- 你在终端里看到的 `python` 不一定是你“想要的那个 Python”。
+- Windows 上很多教程会用 `py`（Python Launcher），但它**不是必须**；如果你用 `pyenv` 管理版本，也可以完全不用 `py`。
 - 你运行 VitePress 站点的命令是 `pnpm docs:dev`（不是 `pnpm run dev`）。
 
 ## 1) 安装 Python（建议）
@@ -15,22 +16,50 @@
 ```bash
 python --version
 pip --version
+```
+
+如果你系统里有 `py`，也可以验证：
+```bash
 py --version
 ```
 
-如果 `python`/`pip` 指向不一致，优先用 `py`：
+> 原理补充：`py` 是 Python Launcher for Windows。通常在你用 python.org 的 Windows 安装包安装 Python 时一并提供（安装选项里也可能可勾选/取消）。它的价值是当系统装了多个 Python 时，用 `py -3.11` 可以精确指定版本；而 `python` 容易受 PATH 顺序影响。
+
+### 如果你没有 `py` 命令，要额外安装吗？
+不一定。
+
+- **如果你用的是 `pyenv`（Windows 常见是 pyenv-win）**：可以直接忽略 `py`，用 `pyenv` 来选版本，再用 `python`/`pip`。
+- **如果你不使用 pyenv、但想要 `py`**：重新运行 Python 安装器（python.org），确保安装了“Python Launcher（py.exe）”。
+
+> 小提醒：你当前终端如果是 Git Bash / WSL，`py` 也不是“理所当然存在”的命令；即使存在也依赖 Windows PATH 是否包含 `py.exe`。
+
+如果你**有** `py`，且 `python`/`pip` 指向不一致，可以用 `py` 明确指定版本：
 ```bash
 py -3.11 --version
 py -3.11 -m pip --version
 ```
 
-> 原理补充：`py -3.11 -m pip ...` 这种写法能保证“pip 属于你指定的 Python 版本”，避免装到别的解释器里。
+> 原理补充：`py -3.11 -m pip ...` 能保证“pip 属于你指定的 Python 版本”，避免装到别的解释器里。
+
+如果你用的是 `pyenv`，优先用这些命令来确认你到底在用哪个 Python：
+```bash
+pyenv --version
+pyenv versions
+pyenv which python
+python --version
+python -c "import sys; print(sys.executable)"
+```
 
 ## 2) 虚拟环境（必须掌握）
 在你要写脚本/工具的目录里创建并使用 `venv`：
 
 ```bash
-py -3.11 -m venv .venv
+python -m venv .venv
+```
+
+如果你希望在 `pyenv` 管理下更“绝对确定”用当前版本，也可以：
+```bash
+pyenv exec python -m venv .venv
 ```
 
 激活环境：
