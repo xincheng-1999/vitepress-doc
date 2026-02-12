@@ -150,6 +150,7 @@ export default {
         { text: "学习路线（自动化 + 大模型）", link: "/python-study/00-roadmap.md" },
         { text: "01. Windows 环境与工程起步", link: "/python-study/01-windows-setup.md" },
         { text: "02. 语法速成（为自动化服务）", link: "/python-study/02-python-basics-for-automation.md" },
+        { text: "02A. 常用库地图（自带 vs 需要安装）", link: "/python-study/02a-common-libs.md" },
         { text: "03. 文件系统与数据读写", link: "/python-study/03-files-and-data.md" },
         { text: "04. 文本处理与正则（Markdown）", link: "/python-study/04-text-regex-markdown.md" },
         { text: "05. 网络请求与接口调用", link: "/python-study/05-http-requests.md" },
