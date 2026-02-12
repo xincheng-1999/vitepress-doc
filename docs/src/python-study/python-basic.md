@@ -1,7 +1,16 @@
 
-# Python 基础（个人学习笔记）
+# Python 速查 & 踩坑备忘录
 
-## 常用语法 & 技巧
+本页定位：**随用随查**。如果你想系统学习（面向 Windows + 脚本自动化 + Ollama），建议从以下教程开始：
+
+- 学习路线：/python-study/00-roadmap
+- 环境起步：/python-study/01-windows-setup
+- 文件与数据：/python-study/03-files-and-data
+- Ollama：/python-study/08-ollama-basics
+
+---
+
+## 常用语法 & 技巧（高频）
 
 ### 1. 一行交换变量
 ```python
@@ -22,7 +31,7 @@ val = d.get("b", 0)  # 不存在返回默认值 0
 ### 4. 枚举遍历
 ```python
 for idx, val in enumerate(["a", "b", "c"]):
-	print(idx, val)
+    print(idx, val)
 ```
 
 ### 5. zip 并行遍历
@@ -30,7 +39,7 @@ for idx, val in enumerate(["a", "b", "c"]):
 names = ["Tom", "Jerry"]
 ages = [18, 20]
 for name, age in zip(names, ages):
-	print(name, age)
+    print(name, age)
 ```
 
 ### 6. 断言调试
@@ -41,8 +50,8 @@ assert 2 + 2 == 4
 ### 7. 读取文件
 ```python
 with open("file.txt", "r", encoding="utf-8") as f:
-	for line in f:
-		print(line.strip())
+    for line in f:
+        print(line.strip())
 ```
 
 ### 8. lambda & map

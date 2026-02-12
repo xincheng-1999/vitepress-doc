@@ -1,3 +1,11 @@
+> 如果你是“从零用 Python 做自动化 + 跑本地模型（Ollama）”，建议先看一遍：
+> - /python-study/00-roadmap
+> - /python-study/11-rag-minimal
+
+---
+
+## 0. 本章需要的环境
+
 # RAG 实战要点：切分、召回、重排、引用
 
 RAG（Retrieval-Augmented Generation）是目前最常见的落地方案：
