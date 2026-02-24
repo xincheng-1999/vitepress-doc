@@ -1,4 +1,28 @@
 export default {
+  "/flutter/fe-to-flutter/": [
+    {
+      text: "Flutter 移动端",
+      items: [
+        { text: "教程总览", link: "/flutter/fe-to-flutter/index.md" },
+        { text: "01. 环境搭建 + 第一个 App", link: "/flutter/fe-to-flutter/01-setup-first-run.md" },
+        { text: "02. Dart 基础（面向前端）", link: "/flutter/fe-to-flutter/02-dart-for-fe.md" },
+        { text: "03. Widget 心智与布局系统", link: "/flutter/fe-to-flutter/03-widget-layout-core.md" },
+        { text: "04. 资源/字体/主题与适配", link: "/flutter/fe-to-flutter/04-assets-font-theme.md" },
+        { text: "05. 路由与导航（go_router）", link: "/flutter/fe-to-flutter/05-navigation-routing.md" },
+        { text: "06. 状态管理（Riverpod）", link: "/flutter/fe-to-flutter/06-riverpod-state.md" },
+        { text: "07. 异步与网络（dio）", link: "/flutter/fe-to-flutter/07-async-network-dio.md" },
+        { text: "08. 表单与校验", link: "/flutter/fe-to-flutter/08-forms-validation.md" },
+        { text: "09. 本地存储与缓存", link: "/flutter/fe-to-flutter/09-storage-cache.md" },
+        { text: "10. 权限管理", link: "/flutter/fe-to-flutter/10-permissions.md" },
+        { text: "11. 相机 + 相册选图", link: "/flutter/fe-to-flutter/11-camera-gallery.md" },
+        { text: "12. 工程化与测试", link: "/flutter/fe-to-flutter/12-architecture-testing.md" },
+        { text: "13. 打包发布与平台差异", link: "/flutter/fe-to-flutter/13-build-release-platform.md" },
+        { text: "14. Android 开发与调试", link: "/flutter/fe-to-flutter/14-android-dev-debug.md" },
+        { text: "15. iOS 开发与调试", link: "/flutter/fe-to-flutter/15-ios-dev-debug.md" },
+        { text: "16. 打包上架全流程", link: "/flutter/fe-to-flutter/16-release-to-stores.md" },
+      ],
+    },
+  ],
   "/front-end/interview-questions/": [
     {
       text: "面试题",

@@ -7,6 +7,7 @@ export default [
       { text: "React相关", link: "/front-end/react/redux.md" },
       { text: "前端基础", link: "/front-end/the-basics/js-basics/event-loop.md" },
       { text: "node", link: "/front-end/nodejs/nvm.md" },
+      { text: "Flutter 移动端", link: "/flutter/fe-to-flutter/index.md" },
     ],
   },
   { text: "大模型", link: "/llm-study/index.md" },
