@@ -101,5 +101,5 @@ Java 你可以在 [MVN Repository](https://mvnrepository.com/) 搜包。
 4.  **异常**：`try-catch` 必须写。
 5.  **Maven**：`pom.xml` 管理依赖。
 
-现在，你可以自信地回到 **[Java 连接 MySQL (JDBC)](../database/mysql/java-connection.md)** 那一节，去理解那些曾经看不懂的代码了！
+接下来我们将学习 [Lombok](/back-end/java/06a-lombok)（偷懒神器），然后进入 [Spring Boot 实战](/back-end/java/07-spring-boot-crud)！
 

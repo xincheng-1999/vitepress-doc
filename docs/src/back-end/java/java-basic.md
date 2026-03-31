@@ -1,5 +1,11 @@
 # java 基础
 
+::: warning ⚠️ 本页内容已过时
+本页为早期笔记，部分代码示例有误（如 `str.toByteArray()` 应为 `str.getBytes()`、`str.toTitleCase()` 不存在、`Integer.parseInt("1.0")` 会抛异常）。
+
+请改阅结构化系列：[01. 环境搭建](/back-end/java/01-environment) → [08. Spring Data 数据库实战](/back-end/java/08-spring-data-db)。
+:::
+
 ## Java 相关网站
 
 [Java 官网](https://www.oracle.com/java/)

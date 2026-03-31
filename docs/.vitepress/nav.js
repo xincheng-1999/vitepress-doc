@@ -16,7 +16,8 @@ export default [
   {
     text: "后端",
     items: [
-      { text: "Java", link: "/back-end/java/java-basic.md" },
+      { text: "Java", link: "/back-end/java/01-environment.md" },
+      { text: "后端学习指南", link: "/back-end/frontend-backend-guide/index.md" },
       { text: "Python", link: "/python-study/python-basic.md" },
       { text: "数据库", link: "/back-end/database/index.md" },
     ],
