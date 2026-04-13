@@ -1,14 +1,11 @@
+/* ─────────────────────────────────────────────
+   全局基础变量（与主题无关）
+───────────────────────────────────────────── */
 :root {
   --vp-c-gray-1: #d1d1d1;
   --vp-c-gray-2: #a8a8a8;
   --vp-c-gray-3: #808080;
   --vp-c-gray-soft: rgba(150, 150, 150, 0.14);
-
-  --vp-c-indigo-1: #f06292;
-  --vp-c-indigo-2: #ec407a;
-  --vp-c-indigo-3: #d81b60;
-  --vp-c-indigo-soft: rgba(240, 98, 146, 0.16);
-  
 
   --vp-c-green-1: #2e7d32;
   --vp-c-green-2: #43a047;
@@ -24,17 +21,213 @@
   --vp-c-red-2: #e57373;
   --vp-c-red-3: #ef9a9a;
   --vp-c-red-soft: rgba(255, 112, 112, 0.14);
+}
+
+/* ─────────────────────────────────────────────
+   🌸 Sakura 樱花粉（默认主题）
+───────────────────────────────────────────── */
+:root,
+[data-theme="sakura"] {
+  --vp-c-indigo-1: #f06292;
+  --vp-c-indigo-2: #ec407a;
+  --vp-c-indigo-3: #d81b60;
+  --vp-c-indigo-soft: rgba(240, 98, 146, 0.16);
+
+  --vp-c-brand-1: #ec407a;
+  --vp-c-brand-2: #f06292;
+  --vp-c-brand-3: #f48fb1;
+  --vp-c-brand-soft: rgba(240, 98, 146, 0.16);
 
   --vp-c-sponsor: #f48fb1;
-
-
   --vp-c-text-1: rgba(102, 45, 71);
   --vp-c-text-2: rgba(102, 45, 71, 0.78);
   --vp-c-text-3: rgba(102, 45, 71, 0.56);
 }
+[data-theme="sakura"].dark,
+.dark:not([data-theme]):not([data-theme="ocean"]):not([data-theme="aurora"]):not([data-theme="nebula"]):not([data-theme="lava"]) {
+  --vp-c-brand-1: #f48fb1;
+  --vp-c-brand-2: #f06292;
+  --vp-c-brand-3: #ec407a;
+  --vp-c-brand-soft: rgba(240, 98, 146, 0.16);
 
-.dark {
   --vp-c-text-1: rgb(208, 90, 143);
-  --vp-c-text-2: rgba(153, 67, 106, 0.78);
-  --vp-c-text-3: rgba(157, 69, 108, 0.56);
+  --vp-c-text-2: rgba(208, 90, 143, 0.78);
+  --vp-c-text-3: rgba(208, 90, 143, 0.56);
+}
+
+/* ─────────────────────────────────────────────
+   🌊 Ocean 深海蓝
+───────────────────────────────────────────── */
+[data-theme="ocean"] {
+  --vp-c-brand-1: #0288d1;
+  --vp-c-brand-2: #029ae0;
+  --vp-c-brand-3: #4fc3f7;
+  --vp-c-brand-soft: rgba(2, 136, 209, 0.14);
+
+  --vp-c-sponsor: #4fc3f7;
+  --vp-c-text-1: rgba(1, 55, 100);
+  --vp-c-text-2: rgba(1, 55, 100, 0.78);
+  --vp-c-text-3: rgba(1, 55, 100, 0.56);
+}
+[data-theme="ocean"].dark {
+  --vp-c-brand-1: #40c4ff;
+  --vp-c-brand-2: #29b6f6;
+  --vp-c-brand-3: #039be5;
+  --vp-c-brand-soft: rgba(41, 182, 246, 0.14);
+
+  --vp-c-text-1: rgb(64, 196, 255);
+  --vp-c-text-2: rgba(64, 196, 255, 0.78);
+  --vp-c-text-3: rgba(64, 196, 255, 0.56);
+}
+
+/* ─────────────────────────────────────────────
+   🌿 Aurora 极光绿
+───────────────────────────────────────────── */
+[data-theme="aurora"] {
+  --vp-c-brand-1: #00897b;
+  --vp-c-brand-2: #00acc1;
+  --vp-c-brand-3: #4db6ac;
+  --vp-c-brand-soft: rgba(0, 137, 123, 0.14);
+
+  --vp-c-sponsor: #4db6ac;
+  --vp-c-text-1: rgba(0, 60, 54);
+  --vp-c-text-2: rgba(0, 60, 54, 0.78);
+  --vp-c-text-3: rgba(0, 60, 54, 0.56);
+}
+[data-theme="aurora"].dark {
+  --vp-c-brand-1: #64ffda;
+  --vp-c-brand-2: #1de9b6;
+  --vp-c-brand-3: #00bfa5;
+  --vp-c-brand-soft: rgba(100, 255, 218, 0.14);
+
+  --vp-c-text-1: rgb(0, 230, 118);
+  --vp-c-text-2: rgba(0, 230, 118, 0.78);
+  --vp-c-text-3: rgba(0, 230, 118, 0.56);
+}
+
+/* ─────────────────────────────────────────────
+   💫 Nebula 星云紫
+───────────────────────────────────────────── */
+[data-theme="nebula"] {
+  --vp-c-brand-1: #8e24aa;
+  --vp-c-brand-2: #ab47bc;
+  --vp-c-brand-3: #ce93d8;
+  --vp-c-brand-soft: rgba(142, 36, 170, 0.14);
+
+  --vp-c-sponsor: #ce93d8;
+  --vp-c-text-1: rgba(56, 15, 80);
+  --vp-c-text-2: rgba(56, 15, 80, 0.78);
+  --vp-c-text-3: rgba(56, 15, 80, 0.56);
+}
+[data-theme="nebula"].dark {
+  --vp-c-brand-1: #ce93d8;
+  --vp-c-brand-2: #ba68c8;
+  --vp-c-brand-3: #ab47bc;
+  --vp-c-brand-soft: rgba(206, 147, 216, 0.14);
+
+  --vp-c-text-1: rgb(206, 147, 216);
+  --vp-c-text-2: rgba(206, 147, 216, 0.78);
+  --vp-c-text-3: rgba(206, 147, 216, 0.56);
+}
+
+/* ─────────────────────────────────────────────
+   🔥 Lava 熔岩橙
+───────────────────────────────────────────── */
+[data-theme="lava"] {
+  --vp-c-brand-1: #e64a19;
+  --vp-c-brand-2: #ff7043;
+  --vp-c-brand-3: #ff8a65;
+  --vp-c-brand-soft: rgba(230, 74, 25, 0.14);
+
+  --vp-c-sponsor: #ff8a65;
+  --vp-c-text-1: rgba(100, 28, 5);
+  --vp-c-text-2: rgba(100, 28, 5, 0.78);
+  --vp-c-text-3: rgba(100, 28, 5, 0.56);
+}
+[data-theme="lava"].dark {
+  --vp-c-brand-1: #ff8a65;
+  --vp-c-brand-2: #ff7043;
+  --vp-c-brand-3: #f4511e;
+  --vp-c-brand-soft: rgba(255, 138, 101, 0.14);
+
+  --vp-c-text-1: rgb(255, 138, 101);
+  --vp-c-text-2: rgba(255, 138, 101, 0.78);
+  --vp-c-text-3: rgba(255, 138, 101, 0.56);
+}
+
+/* ─────────────────────────────────────────────
+   首页 Nav 融入深色 Hero
+   [data-hero] 由 JS 在滚动时动态切换：
+   仅在 nav 覆盖在深色区域（hero / CTA）时添加
+───────────────────────────────────────────── */
+
+/* ── 深色区域的 nav：透明深色 + 毛玻璃 ──── */
+[data-layout="home"][data-hero] {
+  --vp-nav-bg-color: rgba(7, 7, 26, 0.55);
+}
+[data-layout="home"][data-hero] .VPNavBar {
+  background-color: rgba(7, 7, 26, 0.55) !important;
+  backdrop-filter: blur(14px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
+}
+/* 隐藏分隔线，在深色背景上很刺眼 */
+[data-layout="home"][data-hero] .VPNavBar .divider {
+  display: none !important;
+}
+/* 导航文字改为白色 */
+[data-layout="home"][data-hero] .VPNavBarTitle .title {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-layout="home"][data-hero] .VPNavBarMenuLink,
+[data-layout="home"][data-hero] .VPNavBarMenuGroup > .button {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+[data-layout="home"][data-hero] .VPNavBarMenuLink:hover,
+[data-layout="home"][data-hero] .VPNavBarMenuGroup > .button:hover,
+[data-layout="home"][data-hero] .VPNavBarMenuGroup.active > .button {
+  color: #fff !important;
+}
+/* 搜索框 */
+[data-layout="home"][data-hero] .VPNavBarSearch .DocSearch-Button {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+[data-layout="home"][data-hero] .DocSearch-Button-Placeholder,
+[data-layout="home"][data-hero] .DocSearch-Button-Key {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+/* 深/浅模式切换按钮 */
+[data-layout="home"][data-hero] .VPSwitchAppearance {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+/* logo 图标在深色背景上加亮 */
+[data-layout="home"][data-hero] .VPNavBarTitle .logo {
+  filter: brightness(1.3) !important;
+}
+
+/* ── 深色 ↔ 浅色区域平滑过渡 ──── */
+[data-layout="home"] .VPNavBar {
+  transition: background-color 0.35s ease, backdrop-filter 0.35s ease !important;
+}
+[data-layout="home"] .VPNavBar .divider {
+  transition: opacity 0.35s ease !important;
+}
+[data-layout="home"] .VPNavBarTitle .title,
+[data-layout="home"] .VPNavBarMenuLink,
+[data-layout="home"] .VPNavBarMenuGroup > .button {
+  transition: color 0.35s ease !important;
+}
+
+/* ─────────────────────────────────────────────
+   切换主题时的过渡动画
+───────────────────────────────────────────── */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition:
+    color 0.4s ease,
+    background-color 0.4s ease,
+    border-color 0.4s ease,
+    box-shadow 0.4s ease !important;
 }

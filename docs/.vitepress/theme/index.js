@@ -1,5 +1,8 @@
+import { h } from "vue";
 import DefaultTheme from "vitepress/theme";
 import "./custom.css";
+import ThemeSwitch from "./ThemeSwitch.vue";
+import HomeLayout from "./HomeLayout.vue";
 
 const modelPaths = [
   'https://xincheng-1999.github.io/vitepress-doc/models/HK416-1-normal/model.json',
@@ -11,8 +14,12 @@ const modelPaths = [
 ];
 
 export default {
-  ...DefaultTheme,
-  async enhanceApp() {
+  extends: DefaultTheme,
+  Layout: () => h(DefaultTheme.Layout, null, {
+    'layout-bottom': () => h(ThemeSwitch),
+  }),
+  async enhanceApp({ app }) {
+    app.component('HomePage', HomeLayout);
     if (!import.meta.env.SSR) {
       const { loadOml2d } = await import('oh-my-live2d');
       loadOml2d({
