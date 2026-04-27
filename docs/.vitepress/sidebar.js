@@ -78,6 +78,7 @@ export default {
       text: "IT 基础知识收集",
       items: [
         { text: "shell网络代理", link: "/IT-technology/net-proxy.md" },
+        { text: "Clash Verge Claude 分流", link: "/IT-technology/clash-verge-claude-routing.md" },
         {
           text: "Mac",
           items: [
