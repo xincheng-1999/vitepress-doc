@@ -142,13 +142,9 @@ delete: []
 
 ```yaml
 prepend:
-  - 'DOMAIN-SUFFIX,anthropic.com,Claude'
-  - 'DOMAIN-SUFFIX,claude.ai,Claude'
-  - 'DOMAIN-SUFFIX,anthropic.systems,Claude'
-  - 'DOMAIN-SUFFIX,claudeusercontent.com,Claude'
-  - 'DOMAIN,api.anthropic.com,Claude'
-  - 'DOMAIN,console.anthropic.com,Claude'
-
+  # 匹配所有带 claude 或 anthropic 的域名
+  - DOMAIN-KEYWORD,claude,Claude
+  - DOMAIN-KEYWORD,anthropic,Claude
 append: []
 delete: []
 ```
