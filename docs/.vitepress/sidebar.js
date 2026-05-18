@@ -90,6 +90,7 @@ export default {
         { text: "Windows", items: [{ text: "Windows安装器 Chocolatey", link: "/IT-technology/Windows/Chocolatey.md" }] },
         { text: "adb", link: "/IT-technology/adb.md" },
         { text: "内网穿透", link: "/IT-technology/Intranet-penetration.md" },
+        { text: "Tailscale 组网", link: "/IT-technology/tailscale.md" },
         { text: "Git", link: "/IT-technology/git.md" },
       ],
     },
@@ -106,6 +107,14 @@ export default {
       items: [
         { text: "react 基础", link: "/front-end/react/index.md" },
         { text: "redux —— 状态管理器", link: "/front-end/react/redux.md" },
+      ],
+    },
+  ],
+  "/back-end/": [
+    {
+      text: "前端转 Spring 全栈",
+      items: [
+        { text: "路线总览", link: "/back-end/spring-fullstack-roadmap.md" },
       ],
     },
   ],
@@ -240,3 +249,4 @@ export default {
     },
   ],
 };
+
