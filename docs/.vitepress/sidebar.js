@@ -118,7 +118,7 @@ export default {
       ],
     },
   ],
-  "/back-end/java": [
+  "/back-end/java/": [
     {
       text: "写给前端的 Java 入门",
       items: [
