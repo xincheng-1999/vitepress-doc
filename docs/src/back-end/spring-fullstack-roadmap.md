@@ -109,7 +109,7 @@
 
 推荐先看：
 
-- [一个请求的完整链路](/back-end/frontend-backend-guide/02-一个请求的完整链路.md)
+- [一个请求的完整链路](/back-end/frontend-backend-guide/03-request-lifecycle)
 
 本周练习：给“任务管理页面”设计接口。
 

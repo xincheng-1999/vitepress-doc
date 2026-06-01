@@ -10,7 +10,7 @@ Spring Data 的理念非常简单：**你只写接口声明，不写实现，Spr
 
 ## 1. 为什么选 MongoDB？
 
-在 [frontend-backend-guide](/back-end/frontend-backend-guide/01-项目整体架构) 的微服务项目中，MongoDB 是主库。所以我们先学 Spring Data MongoDB。如果你接触的是 MySQL 项目，原理一模一样，只是注解和依赖不同（后面会对比）。
+在 [frontend-backend-guide](/back-end/frontend-backend-guide/02-architecture-overview) 的微服务项目中，MongoDB 是主库。所以我们先学 Spring Data MongoDB。如果你接触的是 MySQL 项目，原理一模一样，只是注解和依赖不同（后面会对比）。
 
 ## 2. 环境准备
 
