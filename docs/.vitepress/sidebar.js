@@ -139,12 +139,6 @@ export default {
         { text: "08. Spring Data 数据库实战", link: "/back-end/java/08-spring-data-db.md" },
       ],
     },
-    {
-      text: "Java 基础 (旧)",
-      items: [
-        { text: "Java基础", link: "/back-end/java/java-basic.md" },
-      ],
-    },
   ],
   "/back-end/frontend-backend-guide/": [
     {
