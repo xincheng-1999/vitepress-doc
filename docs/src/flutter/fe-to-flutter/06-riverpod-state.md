@@ -1,428 +1,118 @@
 ---
-title: 第六章 状态管理（Riverpod）从 0 到可维护
+title: 第六章 状态归属与 Riverpod 数据流
 ---
 
-# 第六章：状态管理（Riverpod）从 0 到可维护
+# 第六章：状态归属与 Riverpod 数据流
 
-## 6.1 本章目标（验收标准）
-完成后你需要能：
-- 理解“状态是什么、放哪里、谁负责改”
-- 用 Riverpod 管理列表状态（增删改）
-- 在多页面之间共享状态（首页改了，详情页也能同步）
-- 学会最基本的可维护分层：UI 不直接改业务数据
+状态库并不会自动让代码有条理。你首先要回答：谁拥有数据、谁能改、何时失效、谁负责失败后的恢复。本文使用 Riverpod 3 的非代码生成 API，避免把生成器配置当成入门前提。
 
----
+## 6.1 把状态放到正确的位置
 
-## 6.2 核心概念：把状态从 Widget 里“抽离”
-第 1~5 章你用 `setState` 管了 `_notes`。
-- 这在单页 demo 可以
-- 但一旦有：多页面共享、网络/数据库、缓存、测试，就会很痛
+| 数据 | 所有者 | 原因 |
+| --- | --- | --- |
+| TextEditingController、焦点 | 编辑页 State | 与页面输入生命周期一致 |
+| 尚未提交的草稿、saving、保存错误 | 编辑页 State | 不应每打一个字就污染业务实体 |
+| 已保存笔记列表 | NotesController/provider | 列表和编辑页共享同一事实 |
+| 数据库连接与读写 | repository | 与 UI 解耦，便于替换测试 |
+| 路由地址中的 id | router | 决定当前资源身份 |
+| 主题偏好 | 应用级 provider + 简单存储 | 跨页面、跨重启 |
 
-Riverpod 的价值：
-- 状态集中管理，可测试
-- UI 只订阅状态（watch），通过 notifier 修改（read）
-- 天然适配 Flutter 的声明式 UI
+如果使用 setState 就足够，不需要为了“工程化”把焦点和每个按钮状态搬进全局 provider。反过来，列表页和编辑页不能各自持有一份可独立修改的业务列表。
 
-**Web 对比：**
-- Vue：Pinia/Vuex
-- React：Redux/Zustand/Jotai
-- Flutter：Riverpod 是目前非常主流且工程化友好的选择
+## 6.2 最小数据流
 
----
+```text
+用户点击保存
+  -> 编辑页校验草稿并进入 saving
+  -> ref.read(notesProvider.notifier).save(note)
+  -> NotesRepository.upsert(note)
+  -> 写入成功后发布新的列表状态
+  -> 所有 watch 列表的 UI 更新
+  -> 当前编辑页返回
 
-## 6.3 安装依赖
-```powershell
-flutter pub add flutter_riverpod
+写入失败
+  -> 异常返回编辑页
+  -> 保存错误就地显示，草稿保留，允许重试
 ```
 
----
+AsyncValue 描述列表的读取状态；它不应承包所有命令的状态。保存错误与首次加载失败影响的 UI 不同，因此示例把保存错误留在编辑页，而不是把整个列表覆盖成 AsyncError。
 
-## 6.4 实战：把 Notes 状态迁移到 Riverpod（完整可运行）
+## 6.3 Provider 三种使用方式
 
-#### 6.4.1 规划文件结构（先做到“能维护”）
-在 `lib/` 下创建：
-- `lib/features/notes/note.dart`
-- `lib/features/notes/notes_provider.dart`
-- `lib/pages/notes_home_page.dart`
-- `lib/pages/note_detail_page.dart`
-- `lib/pages/settings_page.dart`
-- `lib/main.dart`
+- `ref.watch(provider)`：声明响应式依赖；值变化会触发重新计算或 rebuild。
+- `ref.read(provider.notifier)`：在按钮等事件中调用命令，不建立 UI 订阅。
+- `ref.listen(provider, ...)`：处理状态变化引起的副作用，例如单次通知；要避免重复提示。
 
-> 本章为了可运行，会给出关键文件完整代码。你可以直接替换同名文件。
+ProviderScope 在应用根部提供容器。测试通过覆盖 repositoryProvider 注入 fake，让测试不碰真实磁盘。
 
-#### 6.4.2 `lib/features/notes/note.dart`（完整）
+下面是接口与 provider 的局部骨架，完整实现和 import 在第 17 章：
+
 ```dart
-class Note {
-  final String id;
-  final String content;
-  final DateTime createdAt;
+abstract interface class NotesRepository {
+  Future<List<Note>> list();
+  Future<void> upsert(Note note);
+  Future<void> deleteById(String id);
+}
 
-  const Note({
-    required this.id,
-    required this.content,
-    required this.createdAt,
-  });
+final repositoryProvider = Provider<NotesRepository>(
+  (ref) => throw UnimplementedError('由入口注入 repository'),
+);
 
-  Note copyWith({String? content}) {
-    return Note(
-      id: id,
-      content: content ?? this.content,
-      createdAt: createdAt,
-    );
-  }
+final notesProvider = AsyncNotifierProvider<NotesController, List<Note>>(
+  NotesController.new,
+  retry: (retryCount, error) => null,
+);
+
+class NotesController extends AsyncNotifier<List<Note>> {
+  @override
+  Future<List<Note>> build() => ref.watch(repositoryProvider).list();
 }
 ```
 
-#### 6.4.3 `lib/features/notes/notes_provider.dart`（完整）
+这里关闭 Riverpod 3 对失败 provider 的自动重试，以便本地数据库读取失败时立即显示错误，让用户主动重试。需要网络重试时单独设计次数、退避和可重试错误，不沿用默认行为后误以为“只请求了一次”。
+
+## 6.4 明确渲染所有分支
+
 ```dart
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'note.dart';
-
-final notesProvider = NotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
-
-class NotesNotifier extends Notifier<List<Note>> {
-  @override
-  List<Note> build() {
-    return <Note>[];
-  }
-
-  void add(String content) {
-    final note = Note(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      content: content,
-      createdAt: DateTime.now(),
-    );
-
-    state = <Note>[note, ...state];
-  }
-
-  void removeById(String id) {
-    state = state.where((n) => n.id != id).toList();
-  }
-
-  void updateContent({required String id, required String content}) {
-    state = [
-      for (final n in state)
-        if (n.id == id) n.copyWith(content: content) else n,
-    ];
-  }
-
-  Note? findById(String id) {
-    for (final n in state) {
-      if (n.id == id) return n;
-    }
-    return null;
-  }
-}
+// ConsumerWidget.build 中的局部示例
+final notes = ref.watch(notesProvider);
+return notes.when(
+  loading: () => const Center(child: CircularProgressIndicator()),
+  error: (error, stackTrace) => Center(
+    child: FilledButton(
+      onPressed: () => ref.invalidate(notesProvider),
+      child: const Text('读取失败，点击重试'),
+    ),
+  ),
+  data: (items) => items.isEmpty
+      ? const Center(child: Text('还没有笔记'))
+      : NotesList(items: items),
+);
 ```
 
-#### 6.4.4 `lib/main.dart`（完整）
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+`NotesList` 表示你自己的列表组件。空列表是成功加载后的业务结果，不是 loading，更不是 error。刷新已有数据时可以保留旧内容并显示刷新状态，首次加载和后台刷新不必展示同一个整屏 spinner。
 
-import 'pages/note_detail_page.dart';
-import 'pages/notes_home_page.dart';
-import 'pages/settings_page.dart';
+## 6.5 不可变更新与并发边界
 
-void main() {
-  runApp(const ProviderScope(child: NotesApp()));
-}
+`state.value?.add(note)` 是危险写法：原集合被原地修改，旧状态也被污染，订阅判断可能无法表达预期变化。构造新集合并使用 `List.unmodifiable` 暴露快照。
 
-class NotesApp extends StatelessWidget {
-  const NotesApp({super.key});
+保存策略也要明确：
 
-  @override
-  Widget build(BuildContext context) {
-    final router = GoRouter(
-      routes: [
-        GoRoute(
-          path: '/',
-          builder: (context, state) => const NotesHomePage(),
-          routes: [
-            GoRoute(
-              path: 'note/:id',
-              builder: (context, state) {
-                final id = state.pathParameters['id']!;
-                return NoteDetailPage(id: id);
-              },
-            ),
-            GoRoute(
-              path: 'settings',
-              builder: (context, state) => const SettingsPage(),
-            ),
-          ],
-        ),
-      ],
-    );
+- 悲观更新：数据库成功后更新列表。本教程采用，失败恢复最直接。
+- 乐观更新：先更新 UI，失败后回滚。需要处理后续操作、版本冲突和撤销，不只是 catch 里塞回旧数组。
 
-    return MaterialApp.router(
-      title: '随手记',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      routerConfig: router,
-    );
-  }
-}
-```
+多个异步写入不能各自读取旧列表后同时覆盖。第 17 章将命令串行化；一个命令失败不阻塞后续命令，且只在持久化成功后发布快照。这个策略适用于单进程、单 repository 写入口的练习应用；外部数据库监听、多设备同步要重新定义一致性机制。
 
-#### 6.4.5 `lib/pages/notes_home_page.dart`（完整）
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+## 6.6 生命周期与缓存不是一回事
 
-import '../features/notes/notes_provider.dart';
+autoDispose provider 在不再被监听后可释放状态，适合页面级请求；应用级列表可保持存活。依赖变化也可能导致重新计算。需要的资源使用 `ref.onDispose` 清理，异步完成后检查适用版本的 `ref.mounted` 或取消机制。
 
-class NotesHomePage extends ConsumerStatefulWidget {
-  const NotesHomePage({super.key});
+Riverpod 3 中一些旧 API 被放入 legacy 入口。不要把不同版本的 `StateNotifierProvider`、生成代码、手写 Notifier 混在一起。本文选择 AsyncNotifier；这只是教学基线，不要求把成熟项目全部迁移。
 
-  @override
-  ConsumerState<NotesHomePage> createState() => _NotesHomePageState();
-}
+用 `select` 缩小订阅前先确认有性能需求。例如单行只订阅该 Note，但如果你的选择函数每次返回全新的可变集合，仍可能频繁通知。
 
-class _NotesHomePageState extends ConsumerState<NotesHomePage> {
-  final TextEditingController _controller = TextEditingController();
+## 6.7 本章交付
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+要求 AI 标注项目中每份状态的唯一所有者，再实现“保存失败保留草稿”。用 fake repository 人为让 upsert 抛错，验证列表没变、编辑页没退出、第二次提交仍能成功。
 
-  Future<void> _openAddDialog() async {
-    _controller.clear();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('新建笔记'),
-          content: TextField(
-            controller: _controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: '写点什么...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (text == null || text.isEmpty) return;
-    ref.read(notesProvider.notifier).add(text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notes = ref.watch(notesProvider);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('随手记'),
-        actions: [
-          IconButton(
-            tooltip: '设置',
-            onPressed: () => context.push('/settings'),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: notes.isEmpty
-              ? const Center(child: Text('还没有笔记，点右下角 + 新建一条'))
-              : ListView.separated(
-                  itemCount: notes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final note = notes[index];
-                    return Card(
-                      child: ListTile(
-                        title: Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis),
-                        subtitle: Text(note.createdAt.toIso8601String()),
-                        onTap: () => context.push('/note/${note.id}'),
-                        trailing: IconButton(
-                          tooltip: '删除',
-                          onPressed: () => ref.read(notesProvider.notifier).removeById(note.id),
-                          icon: const Icon(Icons.delete_outline),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddDialog,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-```
-
-#### 6.4.6 `lib/pages/note_detail_page.dart`（完整）
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../features/notes/notes_provider.dart';
-
-class NoteDetailPage extends ConsumerStatefulWidget {
-  final String id;
-
-  const NoteDetailPage({
-    super.key,
-    required this.id,
-  });
-
-  @override
-  ConsumerState<NoteDetailPage> createState() => _NoteDetailPageState();
-}
-
-class _NoteDetailPageState extends ConsumerState<NoteDetailPage> {
-  late final TextEditingController _controller;
-  String _initialText = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final note = ref.watch(notesProvider.select((list) {
-      for (final n in list) {
-        if (n.id == widget.id) return n;
-      }
-      return null;
-    }));
-
-    if (note == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('详情')),
-        body: const Center(child: Text('笔记不存在或已被删除')),
-      );
-    }
-
-    // 首次进入时填充数据
-    if (_controller.text.isEmpty) {
-      _controller.text = note.content;
-      _initialText = note.content;
-    }
-
-    final changed = _controller.text.trim() != _initialText.trim();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('笔记 ${note.id.substring(0, 6)}'),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              TextField(
-                controller: _controller,
-                maxLines: 10,
-                decoration: const InputDecoration(
-                  labelText: '内容',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: changed
-                      ? () {
-                          final text = _controller.text.trim();
-                          ref.read(notesProvider.notifier).updateContent(id: note.id, content: text);
-                          Navigator.of(context).pop();
-                        }
-                      : null,
-                  child: const Text('保存'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-```
-
-#### 6.4.7 `lib/pages/settings_page.dart`（占位）
-```dart
-import 'package:flutter/material.dart';
-
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: const SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(12),
-          child: Text('后续会加入主题切换、缓存清理等。'),
-        ),
-      ),
-    );
-  }
-}
-```
-
----
-
-## 6.5 Web 前端思维对比：watch vs read
-- `ref.watch(provider)`：订阅状态，状态变 → rebuild（类似 useSelector）
-- `ref.read(provider.notifier)`：拿到控制器执行动作，不订阅（类似 dispatch）
-
----
-
-## 6.6 实战小练习（必须做）
-
-#### 练习 A：新增一个 `selectedNoteIdProvider`
-需求：
-- 点击某条笔记，把它的 id 写入 provider
-- 首页标题显示：`随手记（已选中：xxxxxx）`
-
-#### 练习 B：添加一个“撤销删除”
-需求：
-- 删除时缓存最近删除的 note
-- Snackbar 提供“撤销”按钮，点击后恢复
-
-提示：在 `NotesNotifier` 里加一个字段缓存最近删除项。
-
----
-
-## 6.7 常见坑
-- 把所有 provider 写在一个文件：前期可以，项目变大后会失控；建议按 feature 拆
-- 在 build 里做副作用（网络/写库）：不要；副作用放 notifier/repository
-- `watch` 过度：会导致不必要 rebuild；可以用 `select` 精准订阅
+能解释这条失败链路，比会背五种状态管理库更接近独立开发。下一步阅读 [表单](./08-forms-validation.md) 和 [存储](./09-storage-cache.md)，或直接运行 [整合示例](./17-integrated-notes-app.md)。

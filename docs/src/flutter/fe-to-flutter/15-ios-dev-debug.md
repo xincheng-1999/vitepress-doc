@@ -1,148 +1,63 @@
 ---
-title: 第十五章 iOS 开发必备 + 调试（Xcode/签名/真机/模拟器）
+title: 第十五章 iOS 真机与故障定位
 ---
 
-# 第十五章：iOS 开发必备 + 调试（Xcode/签名/真机/模拟器）
+# 第十五章：iOS 真机与故障定位
 
-## 15.1 本章目标（验收标准）
-完成后你需要能：
-- 清楚 iOS 开发与发布需要哪些硬性条件（Windows 的边界）
-- 在模拟器与真机上运行 Flutter App，并能查看日志
-- 理解 iOS 签名基本概念：Team、Bundle ID、Provisioning Profile
-- 能把常见 iOS 专属问题定位到“配置/权限/ATS/签名”哪一类
+iOS 最大的新知识是宿主工程、签名与系统能力限制。Windows/Linux 可以阅读本章和写 Dart，但本机 iOS 构建、模拟器与签名需要 macOS/Xcode。
 
----
+## 15.1 准备与启动
 
-## 15.2 iOS 开发需要具备什么（硬门槛）
+安装 Xcode 并完成初次启动，检查 Command Line Tools 选择；按 Flutter 当前官方 iOS 设置说明安装需要的模拟器 runtime 和原生依赖工具。
 
-### 15.2.1 本机开发（必需）
-- macOS
-- Xcode（与 macOS 版本匹配）
-- Flutter SDK
-- CocoaPods（很多插件依赖）
-
-### 15.2.2 真机调试与发布（必需）
-- Apple ID
-- Apple Developer Program（付费开发者账号，发布/真机签名/推送等基本都需要）
-
-**Windows 边界（必须明确）：**
-- Windows 上可以开发 Flutter 代码与 Android
-- iOS 构建/打包/上架必须在 macOS + Xcode 环境完成（或用 CI 的 macOS runner）
-
-**Web 对比：**
-- Web 没有“签名”概念
-- iOS 的签名与审核链路是移动端最主要的学习成本之一
-
----
-
-## 15.3 iOS 项目里你最常碰的配置点
-- `ios/Runner/Info.plist`：权限用途说明、ATS 等
-- `ios/Runner.xcworkspace`：Xcode 工作区（CocoaPods 生成）
-- `ios/Podfile`：iOS 依赖与编译设置
-
----
-
-## 15.4 运行与调试（模拟器 / 真机）
-
-### 15.4.1 列出设备
-```bash
+```sh
+flutter doctor -v
 flutter devices
+flutter run -d <设备ID>
 ```
 
-### 15.4.2 运行到 iOS 模拟器
-```bash
-flutter run
-```
+真机需信任电脑，按系统要求启用 Developer Mode，并配置可用的开发签名。免费 Personal Team 能做受限的个人设备开发，正式分发与 App Store 通常需要相应 Apple Developer Program 资格；不要把两者混为同一门槛。
 
-### 15.4.3 运行到 iPhone 真机
-前置：
-- Xcode → Settings → Accounts 登录你的 Apple ID
-- Xcode 打开 `ios/Runner.xcworkspace`
-- Runner Target → Signing & Capabilities
-  - 勾选 Automatically manage signing
-  - 选择 Team
+## 15.2 找对工程入口
 
-然后：
-```bash
-flutter run
-```
+使用 CocoaPods 的项目通过 `ios/Runner.xcworkspace` 打开，避免只开 xcodeproj 丢失 Pods 依赖。Flutter 与插件对 Swift Package Manager 的支持在演进，按当前生成工程和插件文档选择，不盲目把两种集成方式叠加。
 
----
+| 配置 | 负责什么 |
+| --- | --- |
+| Runner target → Signing & Capabilities | Team、Bundle ID、签名、能力 |
+| `Info.plist` | 用途说明、应用配置等 |
+| entitlements | 推送、关联域名等需授权的能力 |
+| Deployment Target | 最低系统版本，与依赖要求一致 |
+| scheme/configuration | 开发、生产等构建配置 |
 
-## 15.5 iOS 日志与崩溃定位
+改 Bundle ID 后也要检查第三方 SDK、推送、关联域名和商店记录。它不仅是页面显示名称。
 
-### 15.5.1 flutter run 日志
-大多数 Flutter 层异常会在终端输出。
+## 15.3 签名需要理解的三个对象
 
-### 15.5.2 Xcode Console
-当你遇到：
-- 原生崩溃
-- 权限/ATS 拒绝
-- Pod 编译错误
-优先在 Xcode 里看 Console 与 Build Logs。
+- 证书：签名身份及对应私钥。
+- App ID / Bundle ID：标识应用及其能力。
+- Provisioning profile：关联允许的应用身份、证书、能力与适用设备/分发方式。
 
----
+自动签名可以管理很多细节，但不能替你获得团队权限，也不能修复服务端注册错误。出现签名失败时，把 Xcode 的具体失败和目标配置交给 AI，别贴私钥、证书密码或完整凭证。
 
-## 15.6 签名最小知识（够你把 App 跑到真机 + 上 TestFlight）
+模拟器能运行不代表真机签名成功。连接设备后使用对应 target/scheme 构建，确认真正安装到了 iPhone。
 
-### 15.6.1 你要认识的三个词
-- **Bundle ID**：你的 App 唯一标识（类似 Android 的 applicationId）
-- **Team**：开发者团队/账号
-- **Provisioning Profile**：把“设备 + 证书 + Bundle ID”绑在一起的授权文件
+## 15.4 原生崩溃与网络问题
 
-### 15.6.2 Flutter 工程中 Bundle ID 在哪里改
-Xcode → Runner Target → General → Bundle Identifier
+Dart 异常看 Flutter 日志，原生崩溃看 Xcode Console、Devices and Simulators 中的设备日志，分发版本还要保留对应 dSYM 以便符号化。仅有“闪退截图”通常无法定位。
 
-**常见坑：**
-- Bundle ID 改完，某些能力（比如相册/相机/推送）可能需要重新配置签名能力
+iOS ATS 对网络安全有要求；优先 HTTPS 与正确证书链。确需本地开发例外时限制范围，发布前核对，不把全局 `NSAllowsArbitraryLoads` 当标准配置。局域网访问还可能涉及系统本地网络隐私授权，根据实际功能判断。
 
----
+缺少必要的 camera/photos 用途说明可能导致原生失败；这类问题改 Dart try/catch 不一定能救。用途文案必须描述当前用户操作，不用“需要权限以提升体验”这类空话。
 
-## 15.7 网络差异：ATS（App Transport Security）
-iOS 默认对不安全请求更严格。
-- 生产建议只用 https
-- 如果你必须请求 http，需要在 Info.plist 配 ATS 例外（不推荐长期使用）
+## 15.5 模拟器替代不了的测试
 
-（示例思路）
-- 允许某域名 http（具体键值请以 Apple 文档为准，别全局放开）
+相机硬件、部分照片格式/云照片、内存压力、真实键盘与输入法、系统分享、推送和后台行为都需要适当真机验证。模拟器中没有真实相机时，应用应显示可理解的失败或提供相册入口。
 
-**Web 对比：**
-- Web 也有 mixed content，但 iOS 原生更“硬”。
+照片只授权部分访问时功能仍应成立；用户取消 picker 不显示系统故障；从设置返回后重新读取必要状态。应用进后台不保证获得无限后台时间，不把尚未提交的业务数据留到 terminate 回调才保存。
 
----
+## 15.6 本章交付
 
-## 15.8 实战：做一个 iOS 专用的权限用途说明检查
-目标：防止“iOS 上一打开相机/相册就崩”的问题。
+在真机跑通新增、编辑、重启保留、返回拦截、选图/拍照（若已扩展），再用 release/分发构建检查一次。让 AI 提供逐项核对的原生配置 diff，由实际 Xcode 构建与设备结果决定是否正确。
 
-步骤：
-1) 打开 `ios/Runner/Info.plist`
-2) 确认至少存在：
-- `NSCameraUsageDescription`
-- `NSPhotoLibraryUsageDescription`
-3) 文案必须是“用户看得懂的用途说明”，不要写技术词
-
-验收：
-- 调用相机/相册时能弹出授权框，不会直接崩溃
-
----
-
-## 15.9 实战小练习（必须做）
-
-### 练习 A：在 iOS 真机上跑通“相机 + 相册选图”
-验收：
-- 第一次进入功能时弹授权
-- 允许后可拍照/选图
-- 拒绝后 UI 能给出“去设置开启”的引导（参考第 10 章）
-
-### 练习 B：做一个“网络诊断页”
-- 显示当前 baseUrl（来自 `--dart-define`）
-- 做一个 GET 请求按钮，显示成功/失败
-- iOS 上如果失败，学会去检查 ATS/证书/代理
-
----
-
-## 15.10 常见坑
-- CocoaPods 未安装/版本问题：`pod install` 失败导致 iOS 编译不过
-- Signing 配错 Team：真机无法安装
-- Info.plist 缺用途说明：相机/相册直接崩
-- ATS：http 或弱证书环境导致请求失败（debug 可能没暴露，release 更明显）
+参考 [Flutter iOS 设置](https://docs.flutter.dev/platform-integration/ios/setup) 与 [iOS 发布](https://docs.flutter.dev/deployment/ios)。

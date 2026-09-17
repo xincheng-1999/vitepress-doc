@@ -1,205 +1,106 @@
 ---
-title: 第四章 资源、字体、主题与多端适配基础
+title: 第四章 主题、资源、适配与可访问性
 ---
 
-# 第四章：资源、字体、主题与多端适配基础
+# 第四章：主题、资源、适配与可访问性
 
-## 4.1 本章目标（验收标准）
-完成后你需要能：
-- 正确配置并加载 assets（图片/JSON 等）
-- 配置自定义字体（并在主题中统一应用）
-- 用 `ThemeData` 管理亮/暗主题，避免“到处写样式”
-- 初步掌握多端适配（SafeArea、文字缩放、屏幕尺寸差异）
+本章把“看起来没问题”变成可重复验证的 UI。不要让 AI 按截图到处写固定宽高和颜色；先确定主题与约束，再调整局部样式。
 
----
+## 4.1 用语义颜色表达角色
 
-## 4.2 核心概念：Flutter 的资源需要在 `pubspec.yaml` 声明
-**Web 对比：**
-- Web：静态资源由构建工具（Vite/Webpack）处理，import 即可
-- Flutter：打包时需要把资源打进应用包里，必须在 `pubspec.yaml` 声明
-
----
-
-## 4.3 实战：给“随手记”加 App 图标 + 空状态插图
-
-#### 4.3.1 准备资源
-在你的 Flutter 工程里创建目录：
-- `assets/images/`
-
-放两张图（你可以随便用占位图）：
-- `assets/images/empty.png`
-- `assets/images/logo.png`
-
-#### 4.3.2 配置 `pubspec.yaml`
-打开 `pubspec.yaml`，找到 `flutter:` 段，加入：
-
-```yaml
-flutter:
-  uses-material-design: true
-
-  assets:
-    - assets/images/
-```
-
-然后拉取资源索引：
-```powershell
-flutter pub get
-```
-
-#### 4.3.3 在 UI 中加载资源（可运行示例）
-把第 3 章中的 `_EmptyState` 改为：
+局部应用配置，整合示例中也使用这套方式：
 
 ```dart
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/images/empty.png',
-            width: 160,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 12),
-          const Text('还没有笔记'),
-          const SizedBox(height: 6),
-          const Text('点右下角 + 新建一条'),
-        ],
-      ),
-    );
-  }
-}
-```
-
-**验收：**空状态显示图片且不会报找不到资源。
-
----
-
-## 4.4 字体：让全局文本风格统一（不再逐个 Text 配样式）
-
-#### 4.4.1 准备字体文件
-在工程中创建：
-- `assets/fonts/`
-
-放入字体文件（例如：`MiSans-Regular.ttf`、`MiSans-Medium.ttf`，你也可以换别的字体）。
-
-#### 4.4.2 配置 `pubspec.yaml`
-示例：
-```yaml
-flutter:
-  uses-material-design: true
-
-  assets:
-    - assets/images/
-
-  fonts:
-    - family: MiSans
-      fonts:
-        - asset: assets/fonts/MiSans-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/MiSans-Medium.ttf
-          weight: 500
-```
-
-执行：
-```powershell
-flutter pub get
-```
-
-#### 4.4.3 在主题中使用字体
-在 `MaterialApp(theme: ...)` 里加：
-
-```dart
-theme: ThemeData(
-  fontFamily: 'MiSans',
-  colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-  useMaterial3: true,
-),
-```
-
-**常见坑：**
-- 字体文件路径写错 → 运行时报错或回退系统字体
-- family 名称拼写不一致 → 看起来“没生效”
-
----
-
-## 4.5 主题：亮/暗模式（移动端必须做）
-
-#### 4.5.1 为什么要做主题
-- 你不能像 Web 那样到处写 CSS；Flutter 里“把样式集中在 Theme”能保持一致性
-- 适配暗色模式是用户的基本期望
-
-#### 4.5.2 配置 `theme` + `darkTheme` + `themeMode`
-可直接替换 `MaterialApp` 相关片段：
-
-```dart
-return MaterialApp(
-  title: '随手记',
+MaterialApp.router(
+  routerConfig: router,
   theme: ThemeData(
-    fontFamily: 'MiSans',
-    colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.light),
+    colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
     useMaterial3: true,
   ),
   darkTheme: ThemeData(
-    fontFamily: 'MiSans',
-    colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.teal,
+      brightness: Brightness.dark,
+    ),
     useMaterial3: true,
   ),
   themeMode: ThemeMode.system,
-  home: const NotesHomePage(),
-);
-```
-
-**验收：**手机切到暗色模式后，App 主题随系统变化。
-
----
-
-## 4.6 多端适配：SafeArea、文字缩放、尺寸差异
-
-#### 4.6.1 `SafeArea`（刘海屏/手势条必备）
-你已经在第 3 章用过 `SafeArea`。
-
-#### 4.6.2 文字缩放（Accessibility）
-移动端用户可能把字体调大。你不应该写死所有高度。
-- 尽量用 `Padding` + 自然高度
-- 避免 `SizedBox(height: 40)` 这种强限制把文字压扁
-
-#### 4.6.3 用 `LayoutBuilder` 做“响应式”
-示例：
-```dart
-LayoutBuilder(
-  builder: (context, constraints) {
-    final isWide = constraints.maxWidth >= 600;
-    return isWide ? const Text('平板布局') : const Text('手机布局');
-  },
 )
 ```
 
----
+页面用 `Theme.of(context).colorScheme` 和 `textTheme`。错误信息用 error/onError，表面内容使用合适的 surface/onSurface。不要把白色背景、黑色文本硬编码成每个组件的默认值，否则暗色模式只会改变一半页面。
 
-## 4.7 实战小练习（必须做）
+主题偏好是跨页面状态，系统模式、浅色、深色应是三个选项；持久化用 shared_preferences 即可。先读出偏好再渲染，或明确接受启动阶段的短暂默认主题，不要在每次 build 读取磁盘。
 
-#### 练习 A：做一个“设置页”开关暗色模式（先不持久化）
-需求：
-- AppBar 右上角放一个设置按钮
-- 点击进入设置页
-- 页面里有一个 Switch：控制 `ThemeMode.system/light/dark`（先做 light/dark 两种也行）
+## 4.2 声明资源，再加载
 
-提示：本练习会为第 5 章路由做铺垫。
+在现有 `pubspec.yaml` 的 `flutter:` 下合并配置，不要新建第二个同名块：
 
-#### 练习 B：为列表项加默认头像/占位图
-需求：
-- 给 `NoteListItem` 左侧加一个 `CircleAvatar`
-- 没有图片时用 `AssetImage('assets/images/logo.png')`
+```yaml
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: AppSans
+      fonts:
+        - asset: assets/fonts/AppSans-Regular.ttf
+        - asset: assets/fonts/AppSans-SemiBold.ttf
+          weight: 600
+```
 
----
+文件要先真实存在，路径大小写要一致。新增资源声明后执行 `flutter pub get`，必要时重启。只引入实际使用且有授权的字体，中文全量字体可能明显增大包体。
 
-## 4.8 常见坑
-- 改了 `pubspec.yaml` 后忘记 `flutter pub get`
-- assets 目录缩进不对（YAML 对缩进敏感）
-- 资源路径大小写不一致（Windows 不敏感，但 Android/Linux/macOS 可能敏感）
-- 暗色模式下颜色对比不足：尽量用 `ColorScheme`，少写硬编码颜色
+```dart
+Image.asset(
+  'assets/images/empty.png',
+  width: 160,
+  semanticLabel: '暂无笔记',
+  errorBuilder: (_, __, ___) => const Icon(Icons.note_outlined, size: 80),
+)
+```
+
+纯装饰图片可用 `excludeFromSemantics: true`，不要让读屏器重复朗读旁边已有的文案。`Image.asset` 是应用内资源；桌面启动图标、Android adaptive icon、iOS AppIcon 是平台资源，不能靠在页面放一张图片完成。
+
+## 4.3 适配依据是可用空间
+
+- `MediaQuery.sizeOf(context)` 获取窗口尺寸，适合页面级决策。
+- `LayoutBuilder` 获取父级给当前组件的约束，适合组件内部断点。
+- `SafeArea` 避让系统侵入区域，不负责解决所有键盘遮挡。
+- `Scaffold` 默认会针对键盘调整 body 可用空间；表单仍可能需要滚动。
+
+局部示例：让宽屏编辑器保持可读宽度，不给每个控件写屏幕百分比。
+
+```dart
+Center(
+  child: ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 720),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: editor,
+    ),
+  ),
+)
+```
+
+`editor` 是你的表单 Widget。断点应由内容需要决定。手机和平板并不是简单地按设备宽度等比放大所有字号。
+
+## 4.4 可访问性直接影响能否使用
+
+不要通过全局禁用文字缩放修复溢出。优先允许换行、减少固定高度、让页面滚动。使用系统文字缩放实际检查，不只在代码里改字号。
+
+图标按钮设置 `tooltip`，必要时补 Semantics 标签；保存中明确显示进度并禁用重复提交；错误除颜色外还要有文字。交互区域通常至少满足 Material 的 48dp 触摸目标。只加 GestureDetector 包住一个小图标，很容易得到“看得见但点不中”的按钮。
+
+日期显示用本地时间，数据交换和存储保持统一 UTC 约定。多语言项目通过 Flutter localization 与 ARB 管理文案，不用字符串拼接硬凑复数或日期格式。
+
+## 4.5 本章交付与验收矩阵
+
+| 场景 | 应看到什么 |
+| --- | --- |
+| 系统切暗色 | 文本、输入框、对话框均可辨识 |
+| 字体放大至系统较大档位 | 按钮文案和正文不被固定高度截断 |
+| 窄屏、横屏、键盘弹出 | 当前输入与提交入口可到达 |
+| 图片文件缺失 | 页面仍可交互，显示替代内容 |
+| TalkBack / VoiceOver | 可理解新增、编辑、删除按钮含义 |
+
+让 AI 按这张表找出潜在问题并只改对应 Widget；你在设备上逐项复核。截图能辅助视觉检查，不能证明读屏、键盘与触控行为正确。

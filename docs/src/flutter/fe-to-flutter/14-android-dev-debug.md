@@ -1,173 +1,67 @@
 ---
-title: 第十四章 Android 开发必备 + 调试（真机/模拟器/日志/构建变体）
+title: 第十四章 Android 真机与故障定位
 ---
 
-# 第十四章：Android 开发必备 + 调试（真机/模拟器/日志/构建变体）
+# 第十四章：Android 真机与故障定位
 
-## 14.1 本章目标（验收标准）
-完成后你需要能：
-- 清楚 Android 开发需要哪些工具与账号（本机开发与上架分别需要什么）
-- 用真机/模拟器稳定调试：安装、卸载、查看日志、定位崩溃
-- 能区分 debug/profile/release，并知道各自用途
-- 能打出可安装的 release APK，并知道常见失败原因
+不需要先学完 Android 原生开发，但要能沿「设备 → 宿主构建 → Flutter → 插件」定位问题。不要把每个错误都交给 AI 改 Dart。
 
----
+## 14.1 设备连接
 
-## 14.2 Android 开发需要具备什么（最小集合）
-
-### 14.2.1 本机开发（必需）
-- Flutter SDK（stable）
-- Android Studio（或至少 Android SDK + commandline-tools）
-- JDK（一般 Android Studio 自带/或 Gradle 自动处理，尽量不要装多套导致冲突）
-- 设备：
-  - Android Emulator（模拟器）或
-  - Android 真机（推荐，能更真实测试相机/权限/性能）
-
-### 14.2.2 上架发布（额外必需）
-- Google Play Developer 账号（上架用）
-- Android 签名 keystore（更新 App 必需，同一个 App 必须用同一套签名/上传密钥规则）
-
-**Web 对比：**
-- Web 发布只要构建产物 + CDN/服务器
-- Android 上架需要：签名、包名、版本号、AAB、控制台审核
-
----
-
-## 14.3 真机调试（最稳的开发方式）
-
-### 14.3.1 开启开发者选项与 USB 调试
-- 设置 → 关于手机 → 连点“版本号”开启开发者选项
-- 开发者选项 → 开启 USB 调试
-
-### 14.3.2 连接与确认设备
-```powershell
-flutter devices
-```
-你应能看到设备列表。
-
-如果 `flutter devices` 看不到：
-- 检查数据线是否为“可传输数据”
-- 手机弹窗是否点了“允许 USB 调试”
-- 电脑是否装了对应厂商驱动（部分机型需要）
-
----
-
-## 14.4 Android 日志：从“黑屏/闪退”到“定位代码行”
-
-### 14.4.1 最常用：flutter run 自带日志
-```powershell
-flutter run
-```
-大多数 Flutter 层异常会在这里直接打印。
-
-### 14.4.2 更底层：adb logcat（看原生层/权限/崩溃）
-```powershell
+```sh
 adb devices
-adb logcat
-```
-如果日志太多：
-```powershell
-adb logcat | findstr flutter
+flutter devices
+flutter run -d <设备ID>
 ```
 
-**常见你会在 logcat 里看到的关键字：**
-- `FATAL EXCEPTION`：Java/Kotlin 崩溃
-- `MissingPluginException`：插件未正确注册（热重启/版本不兼容/平台未配置）
-- `SecurityException`：权限问题
+出现 unauthorized 时在手机确认 USB 调试授权；没有设备时检查数据线、USB 模式和宿主驱动。多个设备时总是指定 id，防止在错误设备上验证。
 
----
+模拟器通过 Android Studio 的 Device Manager 创建。真机需要开发者选项与 USB 调试；不同厂商还可能限制 USB 安装或后台运行，依据设备实际提示处理。
 
-## 14.5 构建模式：debug / profile / release
+## 14.2 常用取证命令
 
-### 14.5.1 三种模式的用途
-- debug：日常开发（可热重载）
-- profile：性能分析（更接近 release，但仍可观察性能）
-- release：正式发布（AOT，性能/行为最接近上架版本）
-
-### 14.5.2 最小命令集
-```powershell
-flutter run --debug
-flutter run --profile
-flutter run --release
+```sh
+flutter logs -d <设备ID>
+adb -s <设备ID> shell pidof com.example.flutter_notes
+adb -s <设备ID> logcat --pid=<上一步PID>
+adb -s <设备ID> install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-**常见坑：**
-- debug 正常，release 出问题：
-  - 权限/资源路径/网络证书/混淆裁剪
+以上尖括号全部替换成实际值。按 PID 过滤适合观察存活进程；启动就崩溃时可能拿不到 PID，改看 logcat 的 crash buffer 或 Android Studio Logcat。分享日志前清理 token、账号与正文。
 
----
+安装失败若是签名不一致，不要立即卸载再宣布修好了。先确认旧包来源、applicationId 与签名；卸载会删除本地数据，也绕过了原本要验证的升级路径。
 
-## 14.6 实战：为 Android 准备一个“开发/生产”环境开关（最小可用）
-目标：像前端的 `.env.development/.env.production` 一样，至少有一个可切换的 baseUrl。
+## 14.3 文件分别负责什么
 
-我们先不引入复杂库，直接用 `--dart-define`。
+| 文件/目录 | 主要职责 |
+| --- | --- |
+| `android/app/src/main/AndroidManifest.xml` | 主应用权限、组件声明、入口 |
+| `android/app/src/debug/` | 仅 debug 的配置，不能代表 release |
+| `android/app/build.gradle.kts` 或 `.gradle` | SDK、签名、buildTypes/flavors |
+| `android/settings.gradle*`、Gradle wrapper | 构建插件与 Gradle 版本协作 |
+| `MainActivity` | Flutter 原生宿主入口，通常无需改 |
 
-### 14.6.1 写一个环境读取类（可运行）
-新建 `lib/core/env/app_env.dart`：
-```dart
-class AppEnv {
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://example.com',
-  );
+加入网络能力时检查主 Manifest 的 INTERNET 声明，不仅看 debug 配置。Android Internet 是普通权限，不弹运行时请求框。发布支持的 target/min SDK 与插件要求应对齐当前工具链及商店要求，不照抄过时固定数字。
 
-  static const String flavor = String.fromEnvironment(
-    'FLAVOR',
-    defaultValue: 'dev',
-  );
-}
-```
+## 14.4 故障定位表
 
-### 14.6.2 在代码里使用
-例如在你的 dio 初始化里：
-```dart
-// dio.options.baseUrl = AppEnv.apiBaseUrl;
-```
+| 现象 | 首先查什么 | 避免的“万能修复” |
+| --- | --- | --- |
+| Gradle 构建失败 | 第一条失败、JDK/AGP/Gradle 兼容性 | 随机升级所有版本 |
+| debug 能联网，release 失败 | 主 Manifest、生产地址、HTTPS/证书 | 关闭全部证书验证 |
+| 模拟器连不上本机服务 | `10.0.2.2`、端口、监听地址 | 把手机 localhost 当电脑 |
+| 插件 MissingPluginException | 是否新增插件后完整重启、目标是否支持 | 改业务模型掩盖错误 |
+| 页面卡顿 | 真机 profile 帧、CPU、图片解码 | 仅测 debug 或全局加 const |
+| 选图回来结果丢失 | 进程是否被回收、lost data | 假定 await 一定返回 |
 
-### 14.6.3 运行时传参
-```powershell
-flutter run --dart-define=FLAVOR=dev --dart-define=API_BASE_URL=https://jsonplaceholder.typicode.com
-```
+`flutter clean` 是清理产物的工具，不是根因分析。只有怀疑过期构建产物且能说明理由时再使用，否则每轮重下依赖只会拖慢排错。
 
-**Web 对比：**
-- 类似 Vite 的 `import.meta.env` / `process.env`
-- Flutter 里编译期注入更常用（release 更可靠）
+## 14.5 系统行为与性能
 
----
+在真机上执行 `flutter run --profile -d <设备ID>`，通过 DevTools 检查 UI/raster 帧、CPU 和内存。关注滚动时是否频繁解码大图、是否在 UI isolate 同步处理大数据。
 
-## 14.7 打包：本地生成可安装的 APK（release）
-```powershell
-flutter build apk --release
-```
-输出一般在：
-- `build/app/outputs/flutter-apk/app-release.apk`
+测试返回键与预测性返回、旋转、切后台再回来、权限在设置中撤销、进程终止后的恢复。“不保留活动”可帮助暴露部分生命周期问题，但不等同于所有真实进程回收场景。
 
-安装到真机：
-```powershell
-adb install -r build\app\outputs\flutter-apk\app-release.apk
-```
+## 14.6 本章交付
 
----
-
-## 14.8 实战小练习（必须做）
-
-### 练习 A：做一个“诊断页”
-新建页面：
-- 显示 `FLAVOR`、`API_BASE_URL`
-- 显示设备信息（至少：平台 Android、系统版本）
-
-提示：设备信息可先用 `Theme.of(context).platform` + `Platform.operatingSystemVersion`（需要 `dart:io`）。
-
-### 练习 B：模拟一个 release-only 问题并学会排查
-做法：
-- 在 assets 路径里故意写错大小写（Windows 上可能不报错，但在某些环境会出问题）
-- 用 `flutter build apk --release` 安装到真机
-- 观察是否出现图片不显示，学会通过日志定位原因
-
----
-
-## 14.9 常见坑
-- `adb` 找不到：Android SDK Platform-tools 未装或 PATH 未配置（Android Studio 安装后通常自带）
-- `MissingPluginException`：热重启后插件状态异常，尝试完全重启应用或 `flutter clean` 后重跑
-- 多套 JDK/Gradle 冲突：尽量跟随 Android Studio 自带 JDK，避免环境变量指向混乱
-- 真机权限行为与模拟器不同：相机/相册/通知等一定用真机回归
+提交一份最小故障记录：设备和系统、构建模式、复现步骤、首条异常、根因、修复与再次验证结果。让 AI 基于这些证据判断层次，禁止同时改 Flutter、Gradle、SDK 三套版本来碰运气。

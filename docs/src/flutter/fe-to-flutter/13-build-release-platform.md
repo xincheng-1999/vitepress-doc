@@ -1,165 +1,83 @@
 ---
-title: 第十三章 打包发布与平台差异清单（Android / iOS）
+title: 第十三章 构建、签名与环境配置
 ---
 
-# 第十三章：打包发布与平台差异清单（从“能跑”到“能上线”）
+# 第十三章：构建、签名与环境配置
 
-## 13.1 本章目标（验收标准）
-完成后你需要能：
-- 产出 Android `APK`（本地安装包）与 `AAB`（Google Play 上架包）
-- 理解签名、版本号、构建模式（debug/profile/release）
-- 知道 iOS 打包发布需要什么（Windows 的限制）
-- 掌握 Android/iOS 差异排查清单（权限、网络、证书、文件路径）
+debug 能运行不等于能交付。本章先生成一个可安装的正式模式产物，并记录它来自哪份源码与配置；商店流程放在第 16 章。
 
----
+## 13.1 三种模式各测什么
 
-## 13.2 核心概念：Release 与 Debug 不是一个世界
-- Debug：带调试符号、热重载、日志多、性能与权限行为可能不同
-- Release：AOT 编译、性能更好，但也更严格；很多“只在 release 崩”的问题都来自：
-  - 混淆/裁剪（R8/Proguard）
-  - 网络证书/域名
-  - 权限声明遗漏
-  - 资源路径大小写
+| 模式 | 用途 | 不应拿它证明什么 |
+| --- | --- | --- |
+| debug | 热重载、断言、开发调试 | 最终性能与发布可用性 |
+| profile | 真机性能分析 | 商店签名、审核与分发 |
+| release | 用户实际运行形态 | 所有功能自动正确 |
 
-**Web 对比：**
-- 类似 dev build vs production build
+模拟器适合开发，性能结论优先来自真实设备的 profile。release 可能遇到 debug 没有的网络声明、原生优化、签名和环境地址问题。
 
----
+## 13.2 版本、身份与环境
 
-## 13.3 Android：版本号与包名（必须先设置对）
+`pubspec.yaml` 的 `version: 1.0.0+1` 包含展示版本与构建号。Android 通常映射为 versionName/versionCode，iOS 为短版本与 build number。每次提交新构建满足目标商店的递增要求。
 
-#### 13.3.1 版本号
-文件：`pubspec.yaml`
-- `version: 1.0.0+1`
-  - `1.0.0`：展示给用户的版本
-  - `+1`：构建号（Android 的 versionCode）
+applicationId / bundle identifier 是应用身份，应在正式签名、推送和商店注册前确定。改显示名称不等于改身份；换身份安装出来的是另一个应用，不能拿来验证原应用的数据升级。
 
-每次上架必须递增构建号。
+使用编译环境配置的局部示例：
 
-#### 13.3.2 applicationId（包名）
-文件：`android/app/build.gradle`
-- `applicationId "com.example.xxx"`
+```dart
+const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
-上架后不建议随意改包名（相当于换了一个 App）。
+void validateConfig() {
+  final uri = Uri.tryParse(apiBaseUrl);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+    throw StateError('生产 API_BASE_URL 必须是有效 HTTPS 地址');
+  }
+}
+```
 
----
+主线离线 App 不需要该参数；加入网络后，在启动时校验并展示合适的配置错误。`--dart-define` 是配置注入，**不是保密渠道**；客户端里的共享密钥可能被提取，敏感服务凭证应保留在服务端。
 
-## 13.4 Android：生成 Release APK（本地安装包）
-```powershell
+```sh
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.example.com
+```
+
+这里的 example 域名是占位地址，必须替换。需要 dev/prod 并存且包名、图标、签名不同，再引入 flavors/schemes；只有一个 API 地址不同不必立刻配置复杂变体。
+
+## 13.3 Android 签名：先理解，再配置
+
+本地练习可先运行：
+
+```sh
 flutter build apk --release
-```
-输出位置一般是：
-- `build/app/outputs/flutter-apk/app-release.apk`
-
-安装到真机（需要 adb）：
-```powershell
-adb install -r build\app\outputs\flutter-apk\app-release.apk
-```
-
----
-
-## 13.5 Android：生成 AAB（Google Play 上架推荐）
-```powershell
 flutter build appbundle --release
 ```
-输出位置一般是：
-- `build/app/outputs/bundle/release/app-release.aab`
 
----
+APK 可直接安装；AAB 是发布格式，不是可以直接 `adb install` 的文件。产物通常位于 `build/app/outputs/flutter-apk/` 与 `build/app/outputs/bundle/release/`。构建成功仍要检查实际使用的签名，不能默认 release 自动采用你的正式密钥。
 
-## 13.6 Android：配置签名（正式发布必做）
+发布准备按 [官方 Android 发布指南](https://docs.flutter.dev/deployment/android) 完成：
 
-#### 13.6.1 生成 keystore
-在工程根目录（或你自己的安全目录）执行：
-```powershell
-keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+1. 生成并备份上传密钥，妥善保存口令。
+2. 通过本机未跟踪的属性文件或 CI secret 注入 keystore 路径和口令。
+3. 在 app 模块的 signingConfigs 建立 release 配置，并让 release buildType 引用它。
+4. 对照工程实际文件选择 Kotlin DSL（`.gradle.kts`）或 Groovy（`.gradle`），不要混贴语法。
+5. 用签名报告/产物证书工具核对证书，再安装测试。
+
+启用 Play App Signing 时，上传密钥与最终应用签名密钥职责不同。第三方服务需要哪个证书指纹，必须按实际分发路径确认。把密钥和口令提交到 Git 或交给模型粘贴进源码都不是正确配置方式。
+
+## 13.4 iOS 构建
+
+在 macOS 配置 Xcode Team、Bundle ID 与签名后：
+
+```sh
+flutter build ipa --release
 ```
 
-你会被提示输入：
-- keystore 密码
-- alias 密码
-- 组织信息
+产物在 `build/ios/` 的 archive/ipa 相关目录中，具体导出取决于签名和 export 配置。模拟器构建不能替代设备 archive；`--no-codesign` 适合某些构建检查，不生成可直接分发给用户的已签名包。
 
-> 请把 keystore 备份到安全位置。丢了就很难对已上架 App 更新。
+## 13.5 交付证据
 
-#### 13.6.2 创建 `android/key.properties`
-在 `android/` 下创建 `key.properties`：
-```properties
-storePassword=你的store密码
-keyPassword=你的key密码
-keyAlias=upload
-storeFile=../upload-keystore.jks
-```
+记录源码 revision、Flutter 版本、lockfile、构建命令、非敏感配置、构建号、产物位置与测试设备。拿生成的产物实际安装，关闭调试器后启动并跑主流程。
 
-#### 13.6.3 配置 `android/app/build.gradle`
-在 `android/app/build.gradle` 中（通常模板已有注释区域），按 Flutter 官方模板接入 `key.properties`。
+尤其做一次覆盖升级：先装旧版本并写入笔记，再装同身份且兼容签名的新版本，确认迁移。卸载重装只测了新安装，漏掉了最容易造成数据损失的流程。
 
-**重要：不要把 keystore 与 key.properties 提交到公开仓库。**
-- 建议把 keystore 放到仓库外
-- 或至少在 `.gitignore` 忽略
-
----
-
-## 13.7 iOS：打包发布（Windows 限制说明）
-- iOS 打包必须在 macOS 上用 Xcode（Windows 本机无法生成可上架的 iOS 包）
-- 你可以：
-  1) 在 macOS 机器上构建
-  2) 或使用 CI（GitHub Actions + macOS runner）构建
-
-常用命令（macOS）：
-```bash
-flutter build ios --release
-```
-
-上架一般通过 Xcode：
-- Archive → Distribute App → App Store Connect
-
----
-
-## 13.8 Android / iOS 差异排查清单（非常实用）
-
-#### 13.8.1 权限
-- Android：Manifest 声明 + 运行时请求
-- iOS：Info.plist 用途说明（缺了可能直接崩）
-
-#### 13.8.2 文件路径
-- 不要写死路径；使用 `path_provider`
-- Android 与 iOS 的沙盒路径完全不同
-
-#### 13.8.3 网络
-- iOS 对非 https 更严格（ATS）
-- 证书/代理环境不同，release 更容易暴露问题
-
-#### 13.8.4 资源大小写
-- Windows 不敏感，但 Android/Linux/macOS 可能敏感
-- assets 路径大小写必须一致
-
-#### 13.8.5 Release-only 问题
-- 打 release 包后一定真机回归
-- 关注：启动白屏、某页面崩溃、网络全失败、图片不显示
-
----
-
-## 13.9 实战小练习（必须做）
-
-#### 练习 A：为你的 App 生成一个 Release APK 并安装到真机
-验收：
-- 能启动
-- 笔记可读写（SQLite 正常）
-- 相机/相册功能可用（权限正常）
-
-#### 练习 B：写一份你的“发布前检查清单”
-至少包含：
-- 版本号、构建号
-- 权限声明
-- 网络域名与证书
-- 数据库迁移
-- Crash 关键路径测试
-
----
-
-## 13.10 常见坑
-- 忘记递增 build number（上架被拒）
-- keystore 丢失（无法更新已上架应用）
-- 只在 debug 测试（release 上线崩）
-- iOS 用途说明文案不清晰（审核风险）
+AI 任务：“检查当前工程签名引用和环境配置，只报告缺失项；根据实际 Gradle DSL 给出最小修改。”不要让模型生成一个与现有工程无关的完整 build.gradle。

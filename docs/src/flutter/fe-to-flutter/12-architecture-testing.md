@@ -1,175 +1,104 @@
 ---
-title: 第十二章 工程化与架构（分层、错误处理、可测试）
+title: 第十二章 架构、测试与 AI 修改验收
 ---
 
-# 第十二章：工程化与架构（让你的 App “能迭代、能维护、能测试”）
+# 第十二章：架构、测试与 AI 修改验收
 
-## 12.1 本章目标（验收标准）
-完成后你需要能：
-- 用“分层”把 UI/业务/数据访问解耦
-- 定义稳定的错误模型（AppError/Failure），UI 只展示友好文案
-- 为 Riverpod notifier 写单元测试（不跑真 UI 也能测）
-- 为关键页面写一个最小 widget test
+有 AI 帮忙后，代码量很容易增长，判断代码是否值得留下反而更重要。架构的目标是让一项业务修改可以被理解、替换和验证，不是增加目录层级。
 
----
+## 12.1 从一条数据流拆职责
 
-## 12.2 核心概念：移动端项目不是写页面，是写系统
-当你的功能变多（网络/权限/相机/本地库），最容易崩的是：
-- UI 直接操作 dio/sqflite
-- 错误处理散落各处
-- 无法写测试，回归靠手点
-
-本章给你一个“够用且不重”的架构模板：
-- `features/`：按业务域拆
-- `domain`：纯业务模型/规则（尽量无依赖）
-- `data`：repository/数据源（db/http）
-- `ui`：页面与组件
-
----
-
-## 12.3 推荐目录（落地可维护）
-示例（你可以逐步迁移，不需要一次到位）：
+```text
+页面：渲染、输入、导航、临时草稿
+  -> Controller：业务校验、命令顺序、共享状态
+  -> Repository 接口：数据操作契约
+  -> SQLite / HTTP 实现：外部系统细节
 ```
+
+第 17 章为方便复制保留五个 lib 文件。应用扩大后按 feature 拆分即可：
+
+```text
 lib/
-  core/
-    errors/
-      app_error.dart
-    network/
-      app_dio.dart
-  features/
-    notes/
-      domain/
-        note.dart
-      data/
-        notes_repository.dart
-      ui/
-        notes_home_page.dart
-        note_edit_page.dart
-      notes_provider.dart
-  main.dart
+  app/                  # 启动、路由、主题
+  features/notes/
+    note.dart           # 模型、领域规则
+    notes_repository.dart
+    data/               # SQLite/HTTP 实现与映射
+    application/        # provider、controller
+    presentation/       # 页面、组件
 ```
 
-**Web 对比：**
-- 类似 React 项目的 feature-based structure（按功能模块，而不是按文件类型）
+不是每个简单调用都要额外生成 use case、DTO、mapper、service、manager。判断标准是是否隔离了真实变化：数据库替换能否不改表单？测试能否不启动真机？一个功能是否有两份互相冲突的状态？
 
----
+## 12.2 给模型一个稳定的项目契约
 
-## 12.4 错误处理：统一错误模型 + UI 显示友好提示
-你第 7 章已经有 `AppError`，本章建议把它放到 `core/errors`，并坚持一个原则：
-- repository 只抛 `AppError`（或你的 Failure 类型）
-- UI 不直接展示 raw exception（避免用户看到一堆英文栈）
+把以下事实写进你实际 App 的项目说明，再让模型每轮先读取：
 
-示例：
+```text
+项目 SDK 与依赖：以已提交的版本记录、pubspec.yaml、pubspec.lock 为准。
+数据流：页面 -> controller -> repository；UI 不直接写 SQL。
+状态：草稿归编辑页，已保存列表归 notesProvider。
+规则：trim 后非空；失败保留草稿；成功持久化后才更新列表并导航。
+代码：不在 build 做 I/O；异步返回后检查生命周期与结果时效。
+验证：dart format、flutter analyze、flutter test；平台能力另做真机验收。
+改动边界：本轮功能之外的重构、依赖升级需单独说明必要性。
+```
+
+这是工作约束，不是模型质量保证。仍需审阅实际 diff、运行命令、看结果。不要让模型通过放宽断言、吞异常或禁用分析器规则“让测试变绿”。
+
+## 12.3 测试分层：每层证明不同的事
+
+| 层次 | 工具与替身 | 适合证明 | 证明不了 |
+| --- | --- | --- | --- |
+| 模型/Controller | flutter_test + fake repository | 校验、排序、失败不更新、队列恢复 | SQLite 和插件真的工作 |
+| Widget | testWidgets + ProviderScope override | 点击、校验、失败提示、导航、草稿 | 系统键盘和原生权限弹窗 |
+| 数据库集成 | 实际 SQLite 引擎、临时数据库 | SQL、事务、旧版本迁移 | 所有设备差异 |
+| 设备端流程 | integration_test / 手工真机 | 插件、冷启动、覆盖升级、系统交互 | 所有未来网络与机型 |
+
+不要测“容器不为空”来代表状态管理正确。对每条业务不变量，用一个反例验证测试能失败。
+
+## 12.4 可替换的数据层是测试入口
+
 ```dart
-class AppError implements Exception {
-  final String message;
-  final Object? cause;
-  const AppError(this.message, {this.cause});
-}
+final container = ProviderContainer(
+  overrides: [repositoryProvider.overrideWithValue(fakeRepository)],
+);
+addTearDown(container.dispose);
+await container.read(notesProvider.future);
+await container.read(notesProvider.notifier).save(note);
+final notes = await container.read(notesProvider.future);
+expect(notes.single.content, '预期内容');
 ```
 
-在 UI：
-- 展示 `message`
-- `cause` 用于日志
+这是测试函数中的局部结构，完整 imports、fake 和用例见第 17 章。fake 必须实现同一 NotesRepository 接口。用内存 List 写一个无关类再说“以后自行覆盖”，并没有建立真正的测试接缝。
 
----
+至少覆盖：同 id 编辑不新增第二条、失败不发布假数据、失败后可以继续写、两次连续提交不丢数据、删除后 repository 与 UI 一致。用 Completer 控制 Future 完成顺序，可以稳定复现慢请求，不依赖实际等几秒。
 
-## 12.5 Riverpod 可测试的关键：依赖注入（Provider 覆盖）
+## 12.5 Widget 测试验证用户能看到的结果
 
-#### 12.5.1 为什么要“可替换的 repository”
-真实 repository 会访问 SQLite/网络。
-测试时你希望：
-- 用内存假数据（Fake）替代真数据库
-- 测 notifier 的业务逻辑
+保存失败的测试应包含完整动作：进入编辑页 → 输入 → 点击保存 → fake 抛错 → 仍在编辑页 → 文本没丢 → 重试 → 返回列表显示新内容。仅断言 `_saving == false` 会与实现强耦合，也不能证明用户任务成功。
 
-#### 12.5.2 示例：写一个 Fake Repository
-创建 `test/fakes/fake_notes_repository.dart`：
-```dart
-// 注意：把下面的包名 `fe_to_flutter_notes` 替换成你 pubspec.yaml 里的 name。
-import 'package:fe_to_flutter_notes/features/notes/domain/note.dart';
+`pump()` 推进一帧，`pumpAndSettle()` 等待调度的帧稳定；未完成的加载动画可能让后者超时。对 loading 状态使用可控 Future 和有限 pump，不通过增大超时时间掩盖状态永不结束的问题。
 
-class FakeNotesRepository {
-  final List<Note> _data = [];
+## 12.6 调试时先还原事实
 
-  Future<List<Note>> list() async => List.unmodifiable(_data);
+1. 记录最小复现步骤、设备/系统、构建模式与第一条有效异常。
+2. 判断属于布局、状态、异步、数据契约还是原生插件。
+3. 缩小输入或替换外部依赖，保留能触发问题的最小范围。
+4. 修正根因，再运行原复现及相关回归。
 
-  Future<void> upsert(Note note) async {
-    _data.removeWhere((n) => n.id == note.id);
-    _data.add(note);
-    _data.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  }
+适合发给模型的材料是报错、堆栈、有关文件和实际版本。截图适合布局问题；一次崩溃通常还需要日志。“帮我修一下”容易让模型修改无关代码。
 
-  Future<void> deleteById(String id) async {
-    _data.removeWhere((n) => n.id == id);
-  }
-}
+线上错误应保留版本、平台、堆栈、请求关联信息，并去除 token、正文等敏感数据。用户看到的是可操作的文案，开发者保留的是定位证据；不要把底层异常原文直接显示给用户，也不要完全丢弃它。
+
+## 12.7 一轮 AI 修改的验收
+
+```sh
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
 ```
 
-> 注意：你的实际工程 import 路径会不同；这里演示思路。
+读 diff 时优先检查：有没有新的状态副本？build 中有没有副作用？失败有没有被吞掉？有没有引入当前版本不存在的 API？新增插件的原生配置是否匹配目标平台？
 
----
-
-## 12.6 单元测试：测试 notifier 的增删改
-
-#### 12.6.1 关键工具：`ProviderContainer`
-在 Riverpod 里测试通常用：
-- `ProviderContainer(overrides: [...])`
-- 直接读 notifier 并调用方法
-
-#### 12.6.2 示例测试（最小可跑）
-创建 `test/notes_notifier_test.dart`：
-```dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-void main() {
-  test('sample: ProviderContainer works', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-
-    // 这里先演示 container 可用。
-    // 你需要在自己的工程里把 notesProvider / repositoryProvider 覆盖成 fake。
-    expect(container, isNotNull);
-  });
-}
-```
-
-把它升级成真实测试的步骤（不省略）：
-1) 把你的 `notesRepositoryProvider` 设计成可覆盖（Provider）
-2) 测试里写一个 `FakeNotesRepository`
-3) `ProviderContainer(overrides: [notesRepositoryProvider.overrideWithValue(fakeRepo)])`
-4) 调用 `await container.read(notesProvider.notifier).add(...)`
-5) 断言 `container.read(notesProvider).value` 的内容
-
----
-
-## 12.7 Widget Test：确保页面能渲染与响应
-最小 widget test 目标：
-- 首页能渲染“空状态”
-- 点 `+` 能打开编辑页（或弹窗）
-
-你需要：
-- 把路由与 provider 注入到测试环境
-- 用 fake repository 提供稳定数据
-
-如果你不想处理 package 导入，也可以在示例阶段把 fake 类写进测试文件里（等架构稳定后再拆文件）。
-
----
-
-## 12.8 实战小练习（必须做）
-
-#### 练习 A：为 NotesAsyncNotifier 写一个真实的 add/delete 测试
-验收：
-- add 后列表长度 +1
-- delete 后列表长度 -1
-
-#### 练习 B：加一个“全局错误提示组件”
-- 写一个函数 `showAppErrorSnackBar(context, message)`
-- 网络页/存储页出错时统一用它提示
-
----
-
-## 12.9 常见坑
-- provider 里直接 new 具体实现且不可覆盖 → 测试很难写
-- UI 里做 I/O（db/http） → 无法复用、无法测试
-- 错误直接 `print` → 线上无法定位；至少保证 message + cause 有记录位置
+格式、静态检查和测试通过后，按功能做设备验收。第 17 章的测试只覆盖 Dart 与 Widget 层，SQLite 插件、文件权限、键盘、签名与上架不能由这些测试代替。

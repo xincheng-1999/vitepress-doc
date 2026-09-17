@@ -1,329 +1,99 @@
 ---
-title: 第十一章 相机 + 相册选图（完整链路）
+title: 第十一章 图片从选择到持久化
 ---
 
-# 第十一章：相机 + 相册选图（完整链路：权限 → 选图/拍照 → 存储 → 展示）
+# 第十一章：图片从选择到持久化
 
-## 11.1 本章目标（验收标准）
-完成后你需要能：
-- 从相册选择图片，并显示预览
-- 调用系统相机拍照，并拿到图片文件
-- 把图片路径与笔记一起保存到 SQLite
-- 处理权限拒绝、图片过大、路径失效等常见问题
+“调用 picker 并显示图片”只完成了一小步。可交付的链路要覆盖临时文件、草稿取消、写库失败、进程被回收、孤儿文件和大图内存。
 
----
+本章是第 17 章基线的扩展：先按第 9 章把 schema 升至 2，再增加 `imageName` 字段、模型转换与编辑页操作。不要直接把片段塞进 v1 数据库后运行。
 
-## 11.2 核心概念：移动端图片流程和 Web 不一样
-**Web**
-- 上传通常拿到 `File/Blob`，靠浏览器管理临时对象
+## 11.1 先定义文件所有权
 
-**移动端**
-- 你拿到的是“文件路径”（或字节流），需要自己决定：
-  - 是否复制到 App 私有目录
-  - 是否压缩
-  - 是否持久化路径
-
-本章采取最稳妥策略：
-- 选图/拍照后，把图片复制到 App 私有目录（Documents）
-- SQLite 只存“复制后的路径”
-
----
-
-## 11.3 安装依赖
-```powershell
-flutter pub add image_picker
-flutter pub add path_provider
-flutter pub add path
+```text
+系统选择/拍照产生 XFile
+  -> 复制到应用持久目录，以 UUID 命名
+  -> 草稿引用新文件名，保留旧图片
+  -> 数据库保存成功：新引用生效，再清理不再引用的旧文件
+  -> 保存失败：保留草稿与新文件，允许重试
+  -> 明确放弃：清理本次草稿创建且未被引用的文件
 ```
 
-> 你前面已经装过 `path_provider` 可能会提示已存在。
+数据库只存相对名称 `imageName`，显示时再拼当前应用目录。应用容器绝对路径可能变化；picker 返回的缓存路径也不能当长期地址。
 
-同时确保第 10 章权限已完成：
-- AndroidManifest 权限
-- iOS Info.plist 用途说明
+## 11.2 导入服务示例
 
----
+扩展依赖为 image_picker、path_provider、path、uuid；锁定与你 SDK 兼容的版本。本例用到的 API 在 image_picker 1.2.x 中提供，实际支持平台及配置以安装版本说明为准。
 
-## 11.4 实战：给 Note 增加图片字段 + 数据库升级（不省略步骤）
+下面是可独立保存为媒体服务的完整代码，目标 Android/iOS，需要先完成权限用途声明：
 
-#### 11.4.1 升级数据库 schema（从 v1 → v2）
-你第 9 章的表结构没有 `image_path`。
-现在我们：
-- 数据库版本号从 1 改为 2
-- 在 `onUpgrade` 做 `ALTER TABLE`
-
-把 `lib/storage/app_database.dart` 改成（关键差异已包含在完整代码里）：
-
-```dart
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
-
-class AppDatabase {
-  static const _dbName = 'notes.db';
-  static const _dbVersion = 2;
-
-  Database? _db;
-
-  Future<Database> get database async {
-    final existing = _db;
-    if (existing != null) return existing;
-
-    final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, _dbName);
-
-    final db = await openDatabase(
-      path,
-      version: _dbVersion,
-      onCreate: (db, version) async {
-        await db.execute('''
-CREATE TABLE notes (
-  id TEXT PRIMARY KEY,
-  content TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  image_path TEXT
-);
-''');
-        await db.execute('CREATE INDEX idx_notes_created_at ON notes(created_at);');
-      },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute('ALTER TABLE notes ADD COLUMN image_path TEXT;');
-        }
-      },
-    );
-
-    _db = db;
-    return db;
-  }
-
-  Future<void> close() async {
-    final db = _db;
-    _db = null;
-    await db?.close();
-  }
-}
-```
-
-#### 11.4.2 更新 Note 模型
-更新 `lib/features/notes/note.dart`：
-
-```dart
-class Note {
-  final String id;
-  final String content;
-  final DateTime createdAt;
-  final String? imagePath;
-
-  const Note({
-    required this.id,
-    required this.content,
-    required this.createdAt,
-    this.imagePath,
-  });
-
-  Note copyWith({String? content, String? imagePath}) {
-    return Note(
-      id: id,
-      content: content ?? this.content,
-      createdAt: createdAt,
-      imagePath: imagePath ?? this.imagePath,
-    );
-  }
-
-  Map<String, Object?> toDb() {
-    return {
-      'id': id,
-      'content': content,
-      'created_at': createdAt.millisecondsSinceEpoch,
-      'image_path': imagePath,
-    };
-  }
-
-  static Note fromDb(Map<String, Object?> row) {
-    return Note(
-      id: row['id'] as String,
-      content: row['content'] as String,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-      imagePath: row['image_path'] as String?,
-    );
-  }
-}
-```
-
-#### 11.4.3 Repository 与 Provider 支持图片字段
-- `upsert()` 已经用 `toDb()`，无需额外改动
-- 更新 `add()` 方法支持传入 `imagePath`
-
-在 `notes_provider.dart` 的 `add()` 改成：
-```dart
-Future<void> add(String content, {String? imagePath}) async {
-  final repo = ref.read(notesRepositoryProvider);
-  final note = Note(
-    id: DateTime.now().microsecondsSinceEpoch.toString(),
-    content: content,
-    createdAt: DateTime.now(),
-    imagePath: imagePath,
-  );
-  await repo.upsert(note);
-  state = AsyncData(await repo.list());
-}
-```
-
----
-
-## 11.5 图片选择/拍照：`image_picker` + 复制到私有目录
-
-#### 11.5.1 新建图片工具：`lib/media/media_service.dart`
 ```dart
 import 'dart:io';
-
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 class MediaService {
-  final ImagePicker _picker;
+  final _picker = ImagePicker();
 
-  MediaService({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
-
-  Future<String?> pickFromGallery() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery);
-    if (file == null) return null;
-    return _copyToAppDir(File(file.path));
+  Future<String?> pick(ImageSource source) async {
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (picked == null) return null; // 用户取消，不是异常
+    return persist(picked);
   }
 
-  Future<String?> takePhoto() async {
-    final file = await _picker.pickImage(source: ImageSource.camera);
-    if (file == null) return null;
-    return _copyToAppDir(File(file.path));
-  }
-
-  Future<String> _copyToAppDir(File original) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final ext = p.extension(original.path);
-    final filename = 'note_${DateTime.now().microsecondsSinceEpoch}$ext';
-    final targetPath = p.join(dir.path, 'images', filename);
-
-    final imagesDir = Directory(p.join(dir.path, 'images'));
-    if (!await imagesDir.exists()) {
-      await imagesDir.create(recursive: true);
+  Future<String> persist(XFile source) async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory = Directory(p.join(root.path, 'note-images'));
+    await directory.create(recursive: true);
+    final suffix = p.extension(source.path).toLowerCase();
+    final name = '${const Uuid().v4()}$suffix';
+    final target = File(p.join(directory.path, name));
+    try {
+      await source.saveTo(target.path);
+      return name;
+    } catch (_) {
+      if (await target.exists()) await target.delete();
+      rethrow;
     }
-
-    final copied = await original.copy(targetPath);
-    return copied.path;
   }
+
+  Future<LostDataResponse> recoverLostSelection() =>
+      _picker.retrieveLostData();
 }
 ```
 
----
+UUID 避免覆盖同名图片；后缀不等于格式验证。需要上传或接受不可信文件时要校验实际类型、大小、像素数，并确定是否清理 EXIF。`imageQuality` 不保证固定输出大小，也不代表移除了所有元数据。
 
-## 11.6 实战：在“编辑页”加图片（选择/拍照/预览/保存）
-假设你第 8 章已经有 `NoteEditPage`。
-我们做：
-- 顶部显示图片预览（有则显示）
-- 两个按钮：拍照 / 从相册选
-- 保存时把 `imagePath` 传给 provider
+## 11.3 编辑页如何接入
 
-关键思路：
-- UI 只负责拿到路径与预览
-- 真正的数据持久化仍在 provider/repository
+输入区新增“拍照”“选图”“移除图片”三个明确动作。选择中进入 picking 状态避免同时打开多个 picker；finally 复位；await 后检查 mounted。若页面已退出，新导入文件要清理或交给垃圾回收队列，不能永久无人认领。
 
-示例（只给出核心改造片段，保证你能一步步改）：
+持有 `originalImageName` 和 `draftImageName`。再次选图替换的只是草稿；旧业务图片在保存成功前仍保留。清空必须是明确操作，不使用 `imageName ?? oldImageName` 的 copyWith，否则无法移除。
 
-1) 在 `NoteEditPage` State 里增加字段：
-```dart
-String? _imagePath;
-```
+数据库更新和文件删除无法组成一个普通 SQLite 事务。优先保证引用指向已存在的文件，允许暂时多一个孤儿文件，再做补偿清理。不要先删旧图、后写数据库，一旦写库失败，原笔记就坏了。
 
-2) initState 预填编辑时的图片路径：
-```dart
-if (widget.id != null) {
-  final note = await ref.read(notesRepositoryProvider).findById(widget.id!);
-  if (note != null) {
-    _contentController.text = note.content;
-    _imagePath = note.imagePath;
-  }
-}
-```
-> 注意：如果你要 `await`，需要把 initState 改成启动一个 async 方法（不要直接把 initState 标 async）。
+垃圾清理应排除数据库引用和活跃草稿引用，设置合理保留期，避免把刚选入、尚未保存的图删掉。文件缺失时 UI 显示占位图并允许移除失效引用，整页不能崩溃。
 
-3) 页面里加预览：
-```dart
-if (_imagePath != null) ...[
-  ClipRRect(
-    borderRadius: BorderRadius.circular(12),
-    child: Image.file(
-      File(_imagePath!),
-      height: 180,
-      width: double.infinity,
-      fit: BoxFit.cover,
-    ),
-  ),
-  const SizedBox(height: 12),
-]
-```
+## 11.4 Android 进程回收与 lost data
 
-4) 两个按钮：
-```dart
-final media = MediaService();
+Android 打开外部选择/拍照界面时，应用进程可能被系统回收。不能只依赖原来的 `await pickImage` 返回；启动阶段检查 `retrieveLostData()`，处理返回的 files 或 exception。
 
-Row(
-  children: [
-    Expanded(
-      child: OutlinedButton.icon(
-        onPressed: () async {
-          final path = await media.takePhoto();
-          if (path == null) return;
-          setState(() => _imagePath = path);
-        },
-        icon: const Icon(Icons.photo_camera_outlined),
-        label: const Text('拍照'),
-      ),
-    ),
-    const SizedBox(width: 12),
-    Expanded(
-      child: OutlinedButton.icon(
-        onPressed: () async {
-          final path = await media.pickFromGallery();
-          if (path == null) return;
-          setState(() => _imagePath = path);
-        },
-        icon: const Icon(Icons.photo_library_outlined),
-        label: const Text('相册'),
-      ),
-    ),
-  ],
-),
-```
+恢复到哪条笔记不能靠当前内存猜。打开 picker 前持久化操作上下文，例如 draft id、目标 note id 与时间；恢复时核对上下文，再提供“恢复这次附件”的入口。没有可靠上下文时让用户确认归属，不能自动附加到任意一条笔记。
 
-5) 保存时传入 imagePath：
-```dart
-if (widget.id == null) {
-  await ref.read(notesProvider.notifier).add(content, imagePath: _imagePath);
-} else {
-  await ref.read(notesProvider.notifier).updateContent(id: widget.id!, content: content);
-  // 这里建议你把 update 扩展成同时更新 imagePath（作为练习）
-}
-```
+## 11.5 图片显示与内存
 
----
+`Image.file(File(path))` 适合本章移动端目标，不能把 dart:io 原样用于 Web。列表用缩略图和适当解码尺寸，例如根据显示逻辑尺寸与设备像素比设置 cacheWidth；全尺寸原图不应在几十个列表项中同时解码。
 
-## 11.7 实战小练习（必须做）
+布局 width/height 只控制显示尺寸，不必然降低解码内存。压缩、缩略图、上传图片是不同步骤，可能要分别设计。失败时用 errorBuilder 提供替代内容。
 
-#### 练习 A：编辑页支持“删除图片”
-- 图片预览右上角加一个删除按钮（Stack + Positioned）
-- 点击后 `_imagePath = null`
-- 保存后数据库字段也应变为 null
+## 11.6 本章交付
 
-#### 练习 B：图片压缩（可选进阶）
-- 选择/拍照后把图片压缩再保存（提示：可以用 `image` 或 `flutter_image_compress`）
-- 验收：图片文件大小明显下降
+测试：选择后取消编辑、替换后保存失败、移除图片、重启后显示、图片丢失、连续快速点击、系统回收后恢复。抽查应用目录，确认不持续产生未清理的大文件。
 
----
-
-## 11.8 常见坑
-- 权限：没做第 10 章配置会直接失败
-- 路径失效：只保存临时路径可能在重启后失效 → 本章已通过“复制到私有目录”规避
-- 大图内存：直接展示超大图片可能卡顿 → 生产建议做压缩/缩略图
-- iOS “照片权限 limited”：需要兼容（`isLimited` 也算可用）
+让 AI 先列出每个文件由谁创建、何时转交、何时删除，再写代码。能回答这些问题，图片功能才算接入完成。

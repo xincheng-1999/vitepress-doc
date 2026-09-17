@@ -1,125 +1,66 @@
 ---
-title: 第一章 环境搭建 + 第一个 Flutter App
+title: 第一章 环境与第一个开发闭环
 ---
 
-# 第一章：环境搭建 + 第一个 Flutter App（从 0 跑起来）
+# 第一章：环境与第一个开发闭环
 
-## 1.1 本章目标（验收标准）
-完成后你必须能做到：
-- `flutter doctor -v` 自检通过（至少 Android toolchain 正常）
-- 能创建项目并在模拟器/真机上跑起来
-- 能理解热重载/热重启的区别
-- 写出一个最小可用页面：列表 + 新增 + 删除（为后续章节做项目基座）
+本章只做一件事：让你能在设备上运行代码、观察变化、读到错误。业务功能从后续章节开始，完整工程基线见 [第 17 章](./17-integrated-notes-app.md)。
 
----
+## 1.1 先选要交付的平台
 
-## 1.2 Flutter 与 Web 前端的关键差异（先建立正确心智）
-**核心概念：声明式 UI，但渲染体系不同。**
-- Web：DOM/CSS，由浏览器负责布局与绘制。
-- Flutter：Widget（声明）→ Element（实例）→ RenderObject（布局/绘制），Flutter 自己在画布上渲染。
+Flutter 用 Dart 描述 UI，框架完成布局和绘制；多数常规 Flutter UI 不靠浏览器 DOM，也不是把每个 Widget 映射成一个原生控件。相机、文件、定位等能力通常由插件连接平台实现。因此，“Dart 编译通过”和“手机上的系统能力可用”是两层验证。
 
-**你要切换的思维：**
-- Web 常见：操作 DOM / class / CSS。
-- Flutter：通过组合 Widget 表达 UI；状态变化触发 rebuild。
+| 开发电脑 | Android | iOS |
+| --- | --- | --- |
+| Windows / Linux | 可本地开发、调试和构建 | 需要额外的 macOS 构建环境 |
+| macOS | 可本地开发、调试和构建 | 安装 Xcode 后可开发，真机还需签名配置 |
 
-**前端映射：**
-- 组件（React/Vue）≈ Widget
-- props ≈ 构造参数（通常不可变）
-- state/store ≈ State（短期）/ Riverpod Provider（长期）
-- CSS Flex ≈ Row/Column/Flex + Expanded/Flexible
+先选 Android 或 iOS 跑通，不要把所有目标平台的警告都当作阻塞。如果你的目标是手机 App，在 Chrome 跑通只能验证部分 UI，不能替代移动端插件测试。
 
----
+## 1.2 安装与自检
 
-## 1.3 Windows 安装 Flutter（不省略步骤）
+按 [官方安装入口](https://docs.flutter.dev/install) 选择宿主系统，下载 stable SDK 并把 SDK 的 `bin` 加入 PATH。Flutter 已附带匹配的 Dart SDK，不要另装一个不同版本的 Dart 来分析同一项目。
 
-#### 1.3.1 下载安装 Flutter SDK
-1) 下载 Flutter SDK（Stable）Windows zip
-2) 解压到路径简单的位置（避免中文/空格），例如：
-- `D:\dev\flutter`
+Android 安装 Android Studio，在 SDK Manager 安装 SDK Platform、Build-Tools、Command-line Tools 和 Emulator；在 Device Manager 创建并启动模拟器。真机开启开发者选项和 USB 调试，并在手机上确认授权。
 
-#### 1.3.2 配置 PATH
-将 Flutter 的 `bin` 加到系统环境变量 PATH：
-- `D:\dev\flutter\bin`
+iOS 安装 Xcode，打开一次完成组件安装，选好 Command Line Tools。插件的原生依赖方式随 Flutter 与插件版本变化，按 `flutter doctor` 和工程实际生成的配置处理 CocoaPods / Swift Package Manager。
 
-验证：
-```powershell
+```sh
 flutter --version
-```
-
-#### 1.3.3 安装 Android Studio 与 Android SDK
-1) 安装 Android Studio
-2) Android Studio → **SDK Manager** 确保安装：
-- Android SDK Platform（至少一个）
-- Android SDK Build-Tools
-- Android SDK Command-line Tools (latest)
-- Android Emulator（需要模拟器就装）
-
-#### 1.3.4 接受 Android licenses
-```powershell
-flutter doctor --android-licenses
-```
-一路输入 `y`。
-
-#### 1.3.5 自检（必须通过）
-```powershell
 flutter doctor -v
-```
-至少应看到：
-- `Flutter`：OK
-- `Android toolchain`：OK
-- `Connected device`：能识别模拟器或真机
-
----
-
-## 1.4 创建项目并运行（第一个 App）
-
-#### 1.4.1 创建工程
-```powershell
-cd D:\myProject
-flutter create fe_to_flutter_notes
-cd fe_to_flutter_notes
-```
-
-#### 1.4.2 启动模拟器/连接真机
-查看设备：
-```powershell
+flutter doctor --android-licenses
 flutter devices
 ```
 
-#### 1.4.3 运行
-```powershell
-flutter run
+最后两条中，Android licenses 仅用于 Android 工具链。`flutter devices` 至少应出现一个准备开发的目标设备。遇到错误先区分：SDK 不存在、许可证没接受、设备没授权、网络下载失败。这些问题不需要改业务代码。
+
+## 1.3 创建项目
+
+```sh
+flutter create --org com.example flutter_notes
+cd flutter_notes
+flutter run -d <设备ID>
 ```
-终端快捷键：
-- `r`：Hot Reload（热重载）
-- `R`：Hot Restart（热重启）
-- `q`：退出
 
----
+尖括号内容需替换为 `flutter devices` 的结果。`com.example` 只用于练习，正式发布前确定自己的 application ID / bundle ID。
 
-## 1.5 项目结构（你现在必须认识的文件）
-- `lib/`：Dart 代码
-- `lib/main.dart`：入口
-- `pubspec.yaml`：依赖与资源声明（类似 package.json + assets）
-- `android/` / `ios/`：平台工程（权限、原生能力、打包配置）
+| 路径 | 负责什么 | 什么时候需要动 |
+| --- | --- | --- |
+| `lib/main.dart` | Dart 入口与应用根节点 | 开始写 UI |
+| `pubspec.yaml` | SDK、依赖、资源、版本 | 加插件、资源、发版 |
+| `pubspec.lock` | 应用实际解析的依赖版本 | 依赖有意更新时 |
+| `android/`、`ios/` | 原生宿主、权限、签名 | 调平台能力或发布 |
+| `test/` | Dart / Widget 测试 | 实现业务行为时 |
+| `.dart_tool/`、`build/` | 工具生成的产物 | 不手工修改 |
 
----
+## 1.4 最小 UI：读懂入口即可
 
-## 1.6 实战：做一个最小“随手记”首页（可运行、可交互）
-目标功能：
-- 列表展示笔记
-- 右下角 `+` 新建笔记（弹窗输入）
-- 删除笔记
-
-#### 1.6.1 替换 `lib/main.dart`（完整可运行）
-把 `lib/main.dart` 全部替换为：
+下面是完整 `lib/main.dart`，只依赖 Flutter SDK。替换模板后运行。`runApp` 挂载根 Widget；`MaterialApp` 提供主题、导航等应用环境；`Scaffold` 提供页面骨架。
 
 ```dart
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const NotesApp());
-}
+void main() => runApp(const NotesApp());
 
 class NotesApp extends StatelessWidget {
   const NotesApp({super.key});
@@ -129,172 +70,48 @@ class NotesApp extends StatelessWidget {
     return MaterialApp(
       title: '随手记',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
       ),
-      home: const NotesHomePage(),
-    );
-  }
-}
-
-class NotesHomePage extends StatefulWidget {
-  const NotesHomePage({super.key});
-
-  @override
-  State<NotesHomePage> createState() => _NotesHomePageState();
-}
-
-class _NotesHomePageState extends State<NotesHomePage> {
-  final List<Note> _notes = <Note>[];
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _openAddDialog() async {
-    _controller.clear();
-
-    final String? text = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('新建笔记'),
-          content: TextField(
-            controller: _controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              hintText: '写点什么...',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (value) {
-              Navigator.of(context).pop(value.trim());
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (text == null || text.isEmpty) return;
-
-    setState(() {
-      _notes.insert(
-        0,
-        Note(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          content: text,
-          createdAt: DateTime.now(),
+      home: Scaffold(
+        appBar: AppBar(title: const Text('随手记')),
+        body: const SafeArea(
+          child: Center(child: Text('第一条笔记，从这里开始')),
         ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('随手记'),
-      ),
-      body: _notes.isEmpty
-          ? const Center(
-              child: Text('还没有笔记，点右下角 + 新建一条'),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: _notes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final note = _notes[index];
-                return Card(
-                  child: ListTile(
-                    title: Text(
-                      note.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(_formatTime(note.createdAt)),
-                    trailing: IconButton(
-                      tooltip: '删除',
-                      onPressed: () {
-                        setState(() {
-                          _notes.removeAt(index);
-                        });
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddDialog,
-        child: const Icon(Icons.add),
       ),
     );
   }
-
-  String _formatTime(DateTime dt) {
-    final two = (int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
-  }
-}
-
-class Note {
-  final String id;
-  final String content;
-  final DateTime createdAt;
-
-  const Note({
-    required this.id,
-    required this.content,
-    required this.createdAt,
-  });
 }
 ```
 
-#### 1.6.2 运行验收
-```powershell
-flutter run
+不要在这一刻要求自己背下这些类。需要解释的是：Widget 是声明，`build` 返回当前状态下的 UI 描述；`build` 不是“只执行一次的页面初始化”。
+
+## 1.5 三种重启解决不同问题
+
+| 操作 | 会发生什么 | 适用情况 |
+| --- | --- | --- |
+| Hot reload | 更新代码并重建，通常保留已有 State | 改文案、样式、普通 UI 逻辑 |
+| Hot restart | 重启 Dart 应用，内存状态重置 | 改初始化逻辑、静态数据 |
+| 停止后重新运行 | 重新启动并按需重建原生宿主 | 加插件、改权限或原生配置 |
+
+热重载不会重新执行已有 State 的 `initState`。如果改了初始值却没变化，先判断是否需要 hot restart，不要让 AI 为了“生效”把初始化移进 `build`。
+
+## 1.6 建立最短验证循环
+
+```sh
+dart format lib test
+flutter analyze
+flutter test
 ```
-你应该能：新增一条、列表展示、删除。
 
----
+模板的 `test/widget_test.dart` 验证的是默认计数器；替换主页面后，需要把测试更新成你的页面行为。不要把模板断言失败误认为 Flutter 环境坏了，也不要以删掉全部测试作为解决方案。第 12、17 章会给出真实测试。
 
-## 1.7 Web 思维对照：你刚写的 State 管理是什么
-- `_notes`：类似组件内 `useState` 的数据
-- `setState(() { ... })`：类似 `setState` / `setNotes`，触发 UI 重新构建
-- `ListView.separated`：类似 `array.map(renderItem)` + 虚拟列表（惰性构建）
+每次把最上面的第一条有效错误交给 AI，并附带文件路径、相关代码、Flutter 版本、执行命令。一次修一个原因；一条编译错误可能产生几十条连带错误。
 
----
+## 1.7 本章交付与 AI 任务
 
-## 1.8 实战小练习（必须做）
+把目标设备上的首页跑起来，修改标题并热重载；再重启一次，确认自己能区分两种操作。记录 Flutter 版本与设备系统版本，这就是后续复现环境。
 
-#### 练习 A：详情弹窗
-要求：点击某条笔记，弹出对话框展示全文 + 创建时间。
-提示：使用 `showDialog` + `AlertDialog`，内容区域用 `SingleChildScrollView`。
+给 AI 的任务可以是：“根据这份 doctor 输出，只解释目标 Android 设备无法启动的原因，先给诊断命令和预期结果。”验收时你要能回答：故障在 Dart、Flutter 工具链、原生构建还是设备连接？
 
-#### 练习 B：输入校验
-要求：
-- 少于 3 个字符禁止保存（按钮 disabled）
-- 保存后关闭键盘：`FocusScope.of(context).unfocus()`
 
----
-
-## 1.9 常见坑（Windows 高频）
-- `flutter doctor` 找不到 Android SDK：Android Studio → SDK Manager 安装完整，再跑 `flutter doctor -v`
-- 路径含中文/空格：尽量用英文路径（SDK/工程）
-- 模拟器启动失败：检查 BIOS 虚拟化、Device Manager 配置；必要时优先用真机
-- 热重载不生效：改了入口/初始化逻辑，使用热重启（`R`）
+下一篇先看 [项目导读：运行、入口与模块](./01b-project-map.md)。它会带你从实际启动配置追到首页与一次保存，不必等学完所有专题才知道怎样阅读工程。

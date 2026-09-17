@@ -1,155 +1,70 @@
 ---
-title: 第十章 权限管理（Android / iOS 差异）
+title: 第十章 按能力设计权限流程
 ---
 
-# 第十章：权限管理（Android / iOS 差异）（别等到上线才踩坑）
+# 第十章：按能力设计权限流程
 
-## 10.1 本章目标（验收标准）
-完成后你需要能：
-- 在 Flutter 中正确申请运行时权限
-- 清楚 Android 与 iOS 权限配置文件分别在哪里
-- 处理“用户拒绝/永久拒绝/仅一次允许”等状态
-- 给相机/相册功能准备好权限基础（为下一章做铺垫）
+先定义用户操作，再判断平台和插件实际需要什么权限。不要一进 App 就请求相机、照片、存储，更不要看到“选图”就复制所有媒体权限声明。
 
----
+## 10.1 三层问题分别检查
 
-## 10.2 核心概念：权限有两层
-1) **声明权限**（配置文件里写）
-2) **运行时请求**（用户弹窗授权）
+1. 平台声明：Android Manifest、iOS Info.plist 等是否按能力配置。
+2. 运行时授权：当前系统是否需要请求、用户是否允许。
+3. 能力是否可用：设备有没有相机、照片是否在云端、文件是否还能访问。
 
-**Web 对比：**
-- Web 里权限常见是浏览器 API（比如 getUserMedia），配置较少
-- 移动端必须同时处理平台配置 + 运行时状态
+授权成功不代表操作必然成功。模拟器相机不可用、用户取消、系统限制，都需要单独处理。
 
----
+## 10.2 选一张照片通常不需要读取整个图库
 
-## 10.3 安装 permission_handler
-```powershell
-flutter pub add permission_handler
-```
+现代 Android 系统 Photo Picker 让用户选择特定媒体，通常不要求应用申请广泛读取图库的权限。`image_picker` 在支持的版本上使用对应系统能力；以所锁定插件的 Android 配置说明为准。
 
----
+不要为“附加一张照片”默认添加 `READ_MEDIA_IMAGES`、`READ_EXTERNAL_STORAGE` 或全文件管理权限。需要广泛读取图库的是另一类产品能力，也有不同的商店审核要求。
 
-## 10.4 Android 权限配置（关键）
-文件位置：
-- `android/app/src/main/AndroidManifest.xml`
+iOS 需按插件说明配置相应用途描述，系统 picker 与直接照片库访问的授权语义不同。使用系统选择器时，不要再无条件调用 `Permission.photos.request()` 阻挡用户选择。若能力确实读取照片库，要处理 limited，仅可访问用户授权的部分照片。
 
-常见权限（相机/相册/存储）：
-- 相机：`android.permission.CAMERA`
-- 相册：Android 13+ 推荐 `READ_MEDIA_IMAGES`，旧版本用 `READ_EXTERNAL_STORAGE`
+## 10.3 相机也取决于使用方式
 
-**示例（按需添加，不要全抄）：**
-```xml
-<manifest ...>
+`image_picker` 调起拍照流程与 `camera` 插件直接控制预览不是同一种实现。Android 的声明和运行时要求取决于插件与宿主配置；对 image_picker，不要不看 README 就补一套 CAMERA 请求。直接使用相机 API 时按插件要求声明并请求。
 
-  <uses-permission android:name="android.permission.CAMERA" />
+用于拍照与选图的 iOS 用途描述示例，合并到实际 Info.plist 的 dict 中：
 
-  <!-- Android 13+ 读取图片权限 -->
-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
-  <!-- Android 12 及以下（某些机型/插件可能需要） -->
-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-
-  <application ...>
-    ...
-  </application>
-</manifest>
-```
-
-**重要提醒：**
-- 不要“一次性把所有权限都写上”，按功能需要最小化
-- Android 13 开始媒体权限拆分：图片/视频/音频
-
----
-
-## 10.5 iOS 权限配置（关键）
-文件位置：
-- `ios/Runner/Info.plist`
-
-相机/相册必须提供用途说明，否则审核/运行都可能失败。
-
-示例：
 ```xml
 <key>NSCameraUsageDescription</key>
-<string>用于拍摄笔记配图</string>
-
+<string>拍摄照片并附加到你正在编辑的笔记</string>
 <key>NSPhotoLibraryUsageDescription</key>
-<string>用于从相册选择笔记配图</string>
+<string>选择照片并附加到你正在编辑的笔记</string>
 ```
 
----
+录制带声音的视频才考虑麦克风用途描述；不要为未提供的功能预先申请。只写 Dart 请求而缺失必要原生声明，可能触发原生错误或终止。
 
-## 10.6 实战：封装一个“权限请求工具”（可复用）
-目标：把权限逻辑从 UI 里抽出去。
+## 10.4 只有确实需要权限时才用 permission_handler
 
-新建：`lib/permissions/permission_service.dart`
+例如你的应用已经选择直接相机插件，并确认需要独立管理 camera 权限。以下是 permission_handler 的局部流程示例，不是 image_picker 的必需前置步骤：
 
 ```dart
-import 'package:permission_handler/permission_handler.dart';
-
-class PermissionService {
-  const PermissionService();
-
-  Future<bool> ensureCameraPermission() async {
-    final status = await Permission.camera.status;
-    if (status.isGranted) return true;
-
-    final result = await Permission.camera.request();
-    return result.isGranted;
+Future<PermissionStatus> requestCameraIfNeeded() async {
+  final current = await Permission.camera.status;
+  if (current.isGranted || current.isPermanentlyDenied || current.isRestricted) {
+    return current;
   }
-
-  Future<bool> ensurePhotosPermission() async {
-    // iOS/Android 的“相册/照片库”在 permission_handler 里抽象为 photos
-    final status = await Permission.photos.status;
-    if (status.isGranted || status.isLimited) return true;
-
-    final result = await Permission.photos.request();
-    return result.isGranted || result.isLimited;
-  }
-
-  Future<void> openSettingsIfPermanentlyDenied() async {
-    await openAppSettings();
-  }
+  return Permission.camera.request();
 }
 ```
 
-**Web 对比：**
-- 你在 Web 里常做“统一封装 fetch/权限”
-- Flutter 里也一样：把平台差异收敛到 service 层
+需导入 `package:permission_handler/permission_handler.dart` 并按锁定版本配置 Android/iOS，包括必要的 iOS 编译宏等。不要只加 Dart 包就假定原生端已经启用全部能力。
 
----
+| 状态 | 产品行为 |
+| --- | --- |
+| granted | 继续动作，仍捕获实际操作错误 |
+| denied | 解释这项功能需要什么，允许用户稍后再试 |
+| permanentlyDenied | 提供用户主动点击的“打开设置”入口 |
+| restricted | 告知系统/管理策略限制，不无限请求 |
+| limited（适用能力） | 在已授予范围内工作，提供管理选择入口 |
 
-## 10.7 UI 里如何正确处理“拒绝/永久拒绝”
-示例（伪 UI 片段）：
-```dart
-final ok = await permissionService.ensureCameraPermission();
-if (!ok) {
-  // 给用户明确提示，并提供去设置页
-  // 永久拒绝（Android 勾选不再询问 / iOS 拒绝后）一般只能引导去设置
-}
-```
+从系统设置回来后重新读取权限，不沿用离开前的 bool。只有用户选择前往设置时才调用 `openAppSettings()`，不要拒绝一次就自动跳设置页。
 
-建议交互：
-- 第一次拒绝：解释用途 + 提供“再试一次”
-- 永久拒绝：提供“去设置开启”按钮
+## 10.5 本章交付
 
----
+为“给笔记附图”画出操作流程：点击 → 系统选择 → 选中/取消/失败 → 回到草稿。证明普通选图不会提前索要不需要的广泛权限。对确实需要授权的能力，真机测试首次请求、拒绝、永久拒绝、设置中撤销、再次进入。
 
-## 10.8 实战小练习（必须做）
-
-#### 练习 A：权限状态页
-- 新建一个页面 `PermissionsDebugPage`
-- 展示 camera/photos 权限状态（granted/denied/restricted 等）
-- 提供两个按钮：请求相机权限、请求照片权限
-
-#### 练习 B：把权限请求接到设置页
-- 设置页加一个入口：`权限管理`
-- 进入调试页
-
----
-
-## 10.9 常见坑
-- iOS 没写 `Info.plist` 的用途说明：运行直接崩/审核被拒
-- Android 13 权限变化：旧的存储权限可能无效或行为不同
-- 一进入 App 就弹权限：体验差；按功能触发时再申请
-- 不处理“永久拒绝”：用户一直点按钮却永远没反应
+AI 任务：“先列出插件版本、目标 OS 和实际能力，再引用该插件的平台配置要求。没有证据不要添加权限。”参考 [image_picker](https://pub.dev/packages/image_picker) 与 [permission_handler](https://pub.dev/packages/permission_handler)。
