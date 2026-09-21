@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="990" viewBox="0 0 1000 990" role="img" aria-labelledby="title desc"><title id="title">苹果开发到交付路线</title><desc id="desc">从开发团队权限到 App 身份、构建、测试和发布。此图为教学示意。</desc><defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#44637e" stroke-width="1.5"/></marker></defs><rect width="100%" height="100%" fill="#f5f8fc"/>
+<text x="40" y="52" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="30" fill="#17334b" text-anchor="start">苹果开发：从身份到交付</text>
+<text x="40" y="89" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="start">教学示意 · 每一阶段都需要自己的验证证据</text>
+<rect x="40" y="120" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="160" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">01</text>
+<text x="128" y="156" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">账号与团队</text>
+<text x="128" y="189" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">Apple 账号、会员类型、角色、App 与签名资源权限</text>
+<path d="M500 215 L500 237" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="239" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="279" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">02</text>
+<text x="128" y="275" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">App 身份与签名</text>
+<text x="128" y="308" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">Bundle ID、能力、证书私钥、描述文件、设备</text>
+<path d="M500 334 L500 356" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="358" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="398" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">03</text>
+<text x="128" y="394" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">构建与运行</text>
+<text x="128" y="427" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">Xcode / Flutter → 模拟器 → iPhone 真机</text>
+<path d="M500 453 L500 475" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="477" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="517" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">04</text>
+<text x="128" y="513" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">业务与内购</text>
+<text x="128" y="546" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">业务测试环境 + Apple Sandbox → 验单与权益</text>
+<path d="M500 572 L500 594" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="596" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="636" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">05</text>
+<text x="128" y="632" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">测试分发</text>
+<text x="128" y="665" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">Archive → 上传 → TestFlight → 反馈与修复</text>
+<path d="M500 691 L500 713" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="715" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="755" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">06</text>
+<text x="128" y="751" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">审核与发布</text>
+<text x="128" y="784" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">商店材料、隐私与协议 → 审核 → 发布</text>
+<path d="M500 810 L500 832" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<rect x="40" y="834" width="920" height="95" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="64" y="874" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#0057b8" text-anchor="start">07</text>
+<text x="128" y="870" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="24" fill="#17334b" text-anchor="start">维护与更新</text>
+<text x="128" y="903" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">崩溃、订单、通知、凭据轮换与新版本</text>
+</svg>

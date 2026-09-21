@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1370" viewBox="0 0 1040 1370" role="img" aria-labelledby="title desc"><title id="title">内购支付成功路径时序图</title><desc id="desc">App 预下单，苹果购买，服务端使用带 Bundle ID 的 JWT 查询苹果交易，校验并发放权益后 App finish。</desc><defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#44637e" stroke-width="1.5"/></marker></defs><rect width="100%" height="100%" fill="#f5f8fc"/>
+<text x="30" y="45" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="28" fill="#17334b" text-anchor="start">内购：苹果交易与业务订单如何接起来</text>
+<text x="30" y="78" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">教学示意 · 订单 UUID 作为 appAccountToken 是本例约定</text>
+<rect x="18" y="105" width="244" height="58" rx="12" fill="#e3edf9" stroke="#b9cbdc"/>
+<text x="140" y="141" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">App / 页面 + StoreKit</text>
+<path d="M140 165 V1280" stroke="#b9cbdc" stroke-dasharray="7 6"/>
+<rect x="398" y="105" width="244" height="58" rx="12" fill="#e3edf9" stroke="#b9cbdc"/>
+<text x="520" y="141" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">业务服务端</text>
+<path d="M520 165 V1280" stroke="#b9cbdc" stroke-dasharray="7 6"/>
+<rect x="778" y="105" width="244" height="58" rx="12" fill="#e3edf9" stroke="#b9cbdc"/>
+<text x="900" y="141" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">苹果交易服务</text>
+<path d="M900 165 V1280" stroke="#b9cbdc" stroke-dasharray="7 6"/>
+<path d="M140 210 L520 210" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="330.0" y="197" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">① 预下单：商品 ID + 登录身份</text>
+<path d="M520 285 L140 285" fill="none" stroke="#44637e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<text x="330.0" y="272" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">② 创建订单，返回 tradeNo（UUID）</text>
+<path d="M140 365 L900 365" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="520.0" y="352" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">③ 查询苹果商品 / 发起购买</text>
+<text x="520.0" y="390" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="17" fill="#426075" text-anchor="middle">当前 App 身份 + Product ID + appAccountToken</text>
+<rect x="685" y="414" width="325" height="67" rx="12" fill="#fff4db" stroke="#b9cbdc"/>
+<text x="701" y="441" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="20" fill="#17334b" text-anchor="start">用户在系统购买窗口确认</text>
+<text x="701" y="468" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="17" fill="#17334b" text-anchor="start">Sandbox 模拟；Production 付款</text>
+<path d="M900 540 L140 540" fill="none" stroke="#44637e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<text x="520.0" y="527" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">④ 返回苹果交易；App 本地验证</text>
+<path d="M140 625 L520 625" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="330.0" y="612" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑤ 提交交易号、订单号和环境</text>
+<rect x="363" y="666" width="340" height="89" rx="12" fill="#e8f4ed" stroke="#b9cbdc"/>
+<text x="378" y="695" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="start">⑥ 服务端用对应 .p8 签发 JWT</text>
+<text x="378" y="726" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">bid = 当前目标 App 的 Bundle ID</text>
+<path d="M520 810 L900 810" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="710.0" y="797" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑦ 持 JWT 查询交易</text>
+<text x="710.0" y="835" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="17" fill="#426075" text-anchor="middle">选择 Sandbox / Production API</text>
+<path d="M900 895 L520 895" fill="none" stroke="#44637e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<text x="710.0" y="882" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑧ 返回签名交易信息</text>
+<rect x="350" y="936" width="370" height="95" rx="12" fill="#e8f4ed" stroke="#b9cbdc"/>
+<text x="367" y="967" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="start">⑨ 核对 App、商品、环境与订单</text>
+<text x="367" y="999" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="start">幂等落库并发放业务权益</text>
+<path d="M520 1080 L140 1080" fill="none" stroke="#44637e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<text x="330.0" y="1067" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑩ 返回业务处理成功</text>
+<path d="M140 1150 L900 1150" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="520.0" y="1137" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑪ finish：确认交易已处理，不是此时才扣款</text>
+<path d="M140 1225 L520 1225" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="330.0" y="1212" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="19" fill="#17334b" text-anchor="middle">⑫ 刷新业务会员资料</text>
+<text x="30" y="1322" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="21" fill="#17334b" text-anchor="start">只有苹果成功、后端处理成功、权益可查询，才算支付闭环完成。</text>
+</svg>

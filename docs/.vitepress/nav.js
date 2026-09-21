@@ -8,6 +8,7 @@ export default [
       { text: "前端基础", link: "/front-end/the-basics/js-basics/event-loop.md" },
       { text: "node", link: "/front-end/nodejs/nvm.md" },
       { text: "Flutter 实战（AI 辅助）", link: "/flutter/fe-to-flutter/index.md" },
+      { text: "苹果开发全流程", link: "/apple-development/index.md" },
     ],
   },
   { text: "大模型", link: "/llm-study/index.md" },

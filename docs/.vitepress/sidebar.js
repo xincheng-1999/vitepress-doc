@@ -1,4 +1,20 @@
 export default {
+  "/apple-development/": [
+    {
+      text: "前端开发者的苹果开发全流程",
+      items: [
+        { text: "教程总览", link: "/apple-development/index.md" },
+        { text: "01. 账号、会员与团队权限", link: "/apple-development/01-accounts-and-teams.md" },
+        { text: "02. Apple Developer 后台配置", link: "/apple-development/02-developer-console.md" },
+        { text: "03. 证书、私钥、签名和描述文件", link: "/apple-development/03-signing.md" },
+        { text: "04. 从工程到真机运行", link: "/apple-development/04-build-and-device.md" },
+        { text: "05. App Store Connect 后台配置", link: "/apple-development/05-app-store-connect.md" },
+        { text: "06. 内购、服务端和沙盒全链路", link: "/apple-development/06-in-app-purchase.md" },
+        { text: "07. TestFlight、审核与正式发布", link: "/apple-development/07-testflight-and-release.md" },
+        { text: "08. 排查手册、交接清单与术语", link: "/apple-development/08-troubleshooting.md" },
+      ],
+    },
+  ],
   "/flutter/fe-to-flutter/": [
     {
       text: "Flutter 实战（AI 辅助）",

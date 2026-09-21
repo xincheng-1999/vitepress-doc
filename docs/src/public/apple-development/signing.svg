@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="780" viewBox="0 0 1000 780" role="img" aria-labelledby="title desc"><title id="title">代码签名关系图</title><desc id="desc">私钥只在签名端，证书含公钥；系统验证签名并检查描述文件及平台规则。</desc><defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#44637e" stroke-width="1.5"/></marker></defs><rect width="100%" height="100%" fill="#f5f8fc"/>
+<text x="40" y="52" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="29" fill="#17334b" text-anchor="start">签名不是私钥：从材料到验证</text>
+<rect x="40" y="105" width="420" height="100" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="58" y="142" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">本机 / 受控签名端</text>
+<text x="58" y="178" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">私钥：用于产生签名，不随 App 分发</text>
+<rect x="540" y="105" width="420" height="100" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="558" y="142" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">苹果签发的证书</text>
+<text x="558" y="178" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">公钥、身份、用途、有效期、签发者签名</text>
+<rect x="40" y="280" width="420" height="100" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="58" y="317" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">App 代码、资源与能力声明</text>
+<text x="58" y="353" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">构建工具计算摘要和签名数据</text>
+<rect x="540" y="280" width="420" height="100" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="558" y="317" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">描述文件（适用的分发方式）</text>
+<text x="558" y="353" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">App、证书、能力、设备与有效期授权</text>
+<rect x="220" y="460" width="560" height="100" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="238" y="497" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">完成签名的 App 产物</text>
+<text x="238" y="533" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">携带签名、证书及适用的授权材料</text>
+<rect x="100" y="650" width="800" height="90" rx="12" fill="#fff" stroke="#b9cbdc"/>
+<text x="118" y="687" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#17334b" text-anchor="start">iOS 验证后决定是否允许安装 / 运行</text>
+<text x="118" y="723" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">验签 + 证书信任 + 能力及分发授权检查</text>
+<path d="M180 205 L180 278" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="195" y="245" font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="18" fill="#17334b" text-anchor="start">使用私钥签名</text>
+<path d="M250 380 L380 457" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M750 380 L620 457" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M850 205 L850 279" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M500 560 L500 648" fill="none" stroke="#44637e" stroke-width="2"  marker-end="url(#arrow)"/>
+</svg>

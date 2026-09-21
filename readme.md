@@ -49,6 +49,7 @@ vitepress-doc/
 - **数据库基础**: 关系型 vs NoSQL、基本概念
 
 ### 前端技术
+- **苹果开发全流程**：[独立教程](docs/src/apple-development/index.md)，面向前端开发者讲解账号权限、后台配置、证书签名、真机调试、内购沙盒、TestFlight 与上架，包含脱敏标注截图和支付时序图。
 - **面试题**: 手写代码、项目优化、Vue相关问题
 - **框架**: Vue.js、React、Redux
 - **基础知识**: 浏览器原理、网络协议、TypeScript
