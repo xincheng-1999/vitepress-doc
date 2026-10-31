@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="title desc">
+  <title id="title">分阶段诊断请求，并区分三个HTTP版本的传输承载</title>
+  <desc id="desc">排错先看名字解析，再看传输连接、身份验证、HTTP处理。HTTP1.1与HTTP2使用TCP，HTTPS时加入TLS。HTTP2仍有TCP队头阻塞。HTTP3使用基于UDP的QUIC，QUIC集成TLS1.3。阶段图是诊断模型，QUIC的传输与加密握手相互结合。</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9 Z" fill="#164e63"/></marker></defs>
+  <rect width="960" height="640" rx="16" fill="#f8fafc"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#0f172a">
+    <text x="32" y="48" font-size="27" font-weight="700">先问“卡在哪”，再问“用哪一版 HTTP”</text>
+    <text x="32" y="83" font-size="18" fill="#334155">这是诊断模型；QUIC 的传输与加密握手相互结合，不是严格分开的步骤。</text>
+    <rect x="24" y="120" width="192" height="132" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="120" y="154" text-anchor="middle" font-size="22" font-weight="700">名字解析</text>
+    <text x="120" y="187" text-anchor="middle" font-size="18">DNS / 本地解析</text>
+    <text x="120" y="220" text-anchor="middle" font-size="18">得到目标地址</text>
+    <rect x="264" y="120" width="192" height="132" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="360" y="154" text-anchor="middle" font-size="22" font-weight="700">传输连接</text>
+    <text x="360" y="187" text-anchor="middle" font-size="18">TCP / QUIC</text>
+    <text x="360" y="220" text-anchor="middle" font-size="18">是否建立连接</text>
+    <rect x="504" y="120" width="192" height="132" rx="12" fill="#fef3c7" stroke="#92400e" stroke-width="2"/>
+    <text x="600" y="154" text-anchor="middle" font-size="22" font-weight="700">加密与身份</text>
+    <text x="600" y="187" text-anchor="middle" font-size="18">TLS / 证书</text>
+    <text x="600" y="220" text-anchor="middle" font-size="18">是否可信且有效</text>
+    <rect x="744" y="120" width="192" height="132" rx="12" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
+    <text x="840" y="154" text-anchor="middle" font-size="22" font-weight="700">应用响应</text>
+    <text x="840" y="187" text-anchor="middle" font-size="18">HTTP / JSON</text>
+    <text x="840" y="220" text-anchor="middle" font-size="18">状态与业务结果</text>
+    <path d="M218 185 H260" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M458 185 H500" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M698 185 H740" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="32" y="299" font-size="22" font-weight="700">传输关系：HTTPS 场景</text>
+    <rect x="32" y="322" width="896" height="72" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+    <text x="52" y="351" font-size="20" font-weight="600">HTTP/1.1 → TLS → TCP → IP</text>
+    <text x="52" y="379" font-size="18" fill="#334155">可复用连接；流水线仍受响应顺序约束，浏览器常用多连接并发。</text>
+    <rect x="32" y="412" width="896" height="72" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+    <text x="52" y="441" font-size="20" font-weight="600">HTTP/2 → TLS → TCP → IP</text>
+    <text x="52" y="469" font-size="18" fill="#334155">多流复用；TCP 丢包仍可能让同一连接上的多个流一起等待。</text>
+    <rect x="32" y="502" width="896" height="92" rx="10" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="52" y="533" font-size="20" font-weight="600">HTTP/3 → QUIC（集成 TLS 1.3）→ UDP → IP</text>
+    <text x="52" y="564" font-size="18" fill="#334155">避免不同流因同一 TCP 字节流丢包而一起等；并非完全没有拥塞与延迟。</text>
+    <text x="32" y="623" font-size="17" fill="#334155">HTTP/1.1、HTTP/2 也存在明文部署；表中描述的是常见 HTTPS 承载关系。</text>
+  </g>
+</svg>

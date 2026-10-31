@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 650" width="960" height="650" role="img" aria-labelledby="title desc">
+  <title id="title">单体任务系统的反向代理、应用、数据库与可选CDN</title>
+  <desc id="desc">浏览器通过HTTPS访问反向代理，反向代理再连接8080端口的单体task-api，接口路径为/api/tasks。应用通过数据库协议访问MySQL，浏览器不直接访问数据库。公开静态资源可以使用CDN，私人任务响应不应直接共享缓存。早期H2本地练习迁移到MySQL不应改变HTTP契约。图中受控网络仍需认证、加密和访问控制。</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9 Z" fill="#164e63"/></marker></defs>
+  <rect width="960" height="650" rx="16" fill="#f8fafc"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#0f172a">
+    <text x="30" y="44" font-size="27" font-weight="700">先部署单体：入口、业务、数据各有边界</text>
+    <rect x="30" y="78" width="250" height="88" rx="12" fill="#fef3c7" stroke="#92400e" stroke-width="2"/>
+    <text x="155" y="112" text-anchor="middle" font-size="21" font-weight="700">可选：静态资源 CDN</text>
+    <text x="155" y="143" text-anchor="middle" font-size="18">公开 JS / CSS / 图片</text>
+    <text x="330" y="109" font-size="19">浏览器只需知道公开域名和接口契约。</text>
+    <text x="330" y="143" font-size="19" fill="#334155">不需要知道应用副本，也不能直连数据库。</text>
+    <rect x="30" y="236" width="180" height="128" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="120" y="272" text-anchor="middle" font-size="22" font-weight="700">浏览器</text>
+    <text x="120" y="306" text-anchor="middle" font-size="18">任务页面</text>
+    <text x="120" y="339" text-anchor="middle" font-size="18">用户身份与操作</text>
+    <rect x="330" y="236" width="220" height="128" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="440" y="272" text-anchor="middle" font-size="22" font-weight="700">反向代理</text>
+    <text x="440" y="306" text-anchor="middle" font-size="18">Nginx / 入口</text>
+    <text x="440" y="339" text-anchor="middle" font-size="18">TLS、路由、日志</text>
+    <rect x="710" y="236" width="216" height="128" rx="12" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
+    <text x="818" y="272" text-anchor="middle" font-size="22" font-weight="700">task-api :8080</text>
+    <text x="818" y="306" text-anchor="middle" font-size="19">/api/tasks</text>
+    <text x="818" y="339" text-anchor="middle" font-size="18">业务、权限、事务</text>
+    <path d="M120 233 V170" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="139" y="205" font-size="17">静态请求</text>
+    <path d="M213 297 H326" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="270" y="277" text-anchor="middle" font-size="18">HTTPS</text>
+    <path d="M553 297 H706" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="630" y="277" text-anchor="middle" font-size="18">HTTP / HTTPS</text>
+    <text x="630" y="328" text-anchor="middle" font-size="17">保留 /api 路径</text>
+    <path d="M818 367 V486" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="802" y="413" text-anchor="end" font-size="18">数据库协议</text>
+    <text x="802" y="444" text-anchor="end" font-size="18">仅应用可访问</text>
+    <rect x="710" y="490" width="216" height="96" rx="12" fill="#ffffff" stroke="#166534" stroke-width="2"/>
+    <text x="818" y="528" text-anchor="middle" font-size="23" font-weight="700">MySQL</text>
+    <text x="818" y="563" text-anchor="middle" font-size="18">持久化任务数据</text>
+    <rect x="30" y="477" width="610" height="125" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+    <text x="50" y="508" font-size="20" font-weight="700">先把单体部署讲清楚，不必先引入注册中心。</text>
+    <text x="50" y="543" font-size="18">H2 用于本地 CRUD 练习，部署主线迁移到 MySQL。</text>
+    <text x="50" y="577" font-size="18">私人任务 API 不照搬 CDN 静态缓存；迁库不改接口契约。</text>
+    <text x="686" y="637" font-size="18" font-weight="600">受控网络 ≠ 天然安全</text>
+  </g>
+</svg>

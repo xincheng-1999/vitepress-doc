@@ -1,5 +1,10 @@
 # 问题排查方法论
 
+::: info 按需查阅 · 不属于第一轮必修
+本页保留旧版微服务 / JVM / 运维专题，`svc-*`、`cpt-*` 和 `RtData` 是解释场景，不是仓库中另有一套完整源码，也不代表主线依赖。第一次学习请返回 [五阶段主线](./index)；命令和输出需按自己的授权环境、系统与版本验证，不直接复制到生产。故障注入只在隔离实验进行，dump 与日志也可能包含敏感数据。
+:::
+
+
 > 这一章讲的是排查问题的"心法和流程"，是后面[第 28 章 故障排查实战手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook)的总纲。
 > 手册告诉你"症状 X 该怎么治"，本章告诉你"拿到一个不认识的症状，该按什么顺序去想、去查"。
 > 工具的具体用法（jstack、jmap、arthas、Prometheus 查询等）放在[第 29 章 诊断工具箱](/back-end/frontend-backend-guide/29-diagnostic-toolbox)。

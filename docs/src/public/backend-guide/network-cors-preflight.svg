@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" width="960" height="720" role="img" aria-labelledby="title desc">
+  <title id="title">浏览器跨源创建任务时的预检和实际请求</title>
+  <desc id="desc">前端页面来自localhost的5173端口，任务接口位于8080端口，因此跨源。发送JSON触发OPTIONS预检。预检允许后，浏览器才发送POST任务请求。实际响应也必须有正确的跨域头，否则后端可能已执行但脚本读不到结果。预检被拒绝时不发送实际请求。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9 Z" fill="#164e63"/></marker>
+    <marker id="reply" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9 Z" fill="#166534"/></marker>
+  </defs>
+  <rect width="960" height="720" rx="16" fill="#f8fafc"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#0f172a">
+    <text x="40" y="47" font-size="27" font-weight="700">跨源 JSON 请求：先问权限，再发业务请求</text>
+    <text x="40" y="81" font-size="18" fill="#334155">源由协议、主机、端口组成；同一台电脑的两个端口仍然可以跨源。</text>
+    <rect x="60" y="112" width="320" height="90" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="220" y="148" text-anchor="middle" font-size="22" font-weight="700">浏览器中的任务页面</text>
+    <text x="220" y="180" text-anchor="middle" font-size="19">http://localhost:5173</text>
+    <rect x="580" y="112" width="320" height="90" rx="12" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
+    <text x="740" y="148" text-anchor="middle" font-size="22" font-weight="700">任务接口 task-api</text>
+    <text x="740" y="180" text-anchor="middle" font-size="19">http://localhost:8080</text>
+    <path d="M220 205 V561 M740 205 V561" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="7 6"/>
+    <text x="480" y="246" text-anchor="middle" font-size="20" font-weight="600">① OPTIONS /api/tasks：申请 POST + JSON</text>
+    <path d="M224 263 H736" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="480" y="322" text-anchor="middle" font-size="20" font-weight="600">② 允许指定源、方法、请求头</text>
+    <path d="M736 340 H224" fill="none" stroke="#166534" stroke-width="3" marker-end="url(#reply)"/>
+    <text x="480" y="413" text-anchor="middle" font-size="20" font-weight="600">③ POST /api/tasks：发送任务 JSON</text>
+    <path d="M224 431 H736" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="480" y="490" text-anchor="middle" font-size="20" font-weight="600">④ 201 + JSON：实际响应也须允许跨源读取</text>
+    <path d="M736 508 H224" fill="none" stroke="#166534" stroke-width="3" marker-end="url(#reply)"/>
+    <rect x="40" y="581" width="880" height="111" rx="10" fill="#fff7ed" stroke="#9a3412" stroke-width="1.5"/>
+    <text x="60" y="610" font-size="18" font-weight="600">预检不通过：不发送实际请求。实际响应跨域头错误：业务可能已经执行。</text>
+    <text x="60" y="641" font-size="18">带凭据时还需允许凭据、返回精确源；Cookie 仍受 SameSite 等规则限制。</text>
+    <text x="60" y="672" font-size="18">CORS 不是认证，也不能替代 CSRF 防护；curl 不执行浏览器的跨域拦截。</text>
+  </g>
+</svg>

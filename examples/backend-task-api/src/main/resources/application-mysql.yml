@@ -1,0 +1,9 @@
+# Local Compose exercise only. Production uses a migration tool, not init=always.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3307/tasks?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
+    username: ${DB_USERNAME:taskapp}
+    password: ${DB_PASSWORD}
+  sql:
+    init:
+      mode: always

@@ -1,592 +1,173 @@
-# 后端测试
-
-> 你写前端时大概率写过 `jest`：`describe / it / expect`，跑 `npm test` 一片绿。后端测试的思路完全一样——只是工具换成了 **JUnit 5 + Mockito + Spring Test**，而且后端因为"看不见界面、跑在服务器上"，对测试的依赖比前端更重：一个没人测过的 Service，上线后扣错配额、漏掉权限校验，损失是真金白银。
->
-> 这一章带你把前端的 `jest` 经验整体平移过来，并补上后端特有的两块：**Mock 依赖**（不连真 DB/下游）和 **集成测试**（起真实环境跑）。运行示例仍然是那套 AI 生图微服务（`svc-user` / `svc-canvas` 等）。
->
-> 💡 **前端类比**：`jest` ≈ JUnit（测试运行器 + 断言），`jest.mock()` ≈ Mockito（替身），`@testing-library` 发请求测组件 ≈ Spring 的 `MockMvc` 发请求测 Controller。心智模型不变，换个 import 而已。
-
+---
+prev:
+  text: "C4. 实验：Session 登录与隔离"
+  link: "/back-end/frontend-backend-guide/32a-session-login-lab"
+next:
+  text: "D1. 上传、导出、调度与回调"
+  link: "/back-end/frontend-backend-guide/39-backend-feature-map"
 ---
 
-## 35.1 测试金字塔：先搞清楚测什么
+# 后端测试：把任务 API 的承诺变成证据
 
-测试不是越多越好，而是按"数量多、速度快"往下铺。经典的**测试金字塔**：
+> 场景：你把全局异常处理改得更“统一”，结果 405 和 415 都成了 500；页面还能创建任务，手工点几下却没发现回归。
+> 测试的价值不是证明“代码执行过”，而是守住接口结果、数据库副作用和安全边界。
 
-```text
-            ▲  少 / 慢 / 脆
-           ╱ ╲
-          ╱E2E╲          端到端：起整套服务 + 真实依赖，
-         ╱─────╲         模拟用户从登录到出图的完整链路
-        ╱       ╲
-       ╱ 集成测试 ╲       Integration：起 Spring 上下文 / 真实 DB，
-      ╱───────────╲      测"几层串起来"对不对（Controller→Service→DB）
-     ╱             ╲
-    ╱   单元测试     ╲     Unit：只测一个类/一个方法，
-   ╱─────────────────╲    依赖全 mock，毫秒级，跑几千个都不卡
-  ▼  多 / 快 / 稳
-```
+前置：[CRUD 实验](/back-end/frontend-backend-guide/07-build-a-crud-api)、[接口契约](/back-end/frontend-backend-guide/34-api-design)。主线源码位于仓库根目录 `examples/backend-task-api`，测试类为 `src/test/java/dev/learning/tasks/TaskApiTest.java`。
 
-| 层级 | 测什么 | 速度 | 数量 | 前端类比 |
-| --- | --- | --- | --- | --- |
-| 单元测试 Unit | 单个 Service / 工具方法，依赖全 mock | 毫秒级 | 最多（70%+） | `jest` 测纯函数 / hook |
-| 集成测试 Integration | 多层串联：Controller→Service→真实 DB | 秒级 | 中等 | `supertest` 打你的 Node 路由 |
-| 端到端 E2E | 整套服务 + 真实环境，模拟真用户 | 分钟级 | 最少 | Playwright / Cypress |
+**学完能做什么：**运行并读懂现有 7 个测试方法，解释它们测到和没测到什么，再为 MySQL、权限和并发设计下一批验收用例。维护时已实际通过这 7 个测试及可执行构建；下面给出可复现命令，你仍应在自己的环境运行。Session 变体的 16 个安全测试与覆盖边界见 [登录实验](./32a-session-login-lab)。
 
-**后端的重点是单元 + 集成**。E2E 又慢又脆（任何一个下游抖一下就红），通常交给专门的测试团队或定时跑，开发自己写得少。
+## 1. 先运行真实已有的测试
 
-> 💡 **前端类比**：和前端完全一致——你不会给每个按钮都写 Cypress，而是大量 `jest` 单测 + 少量关键路径 E2E。倒金字塔（E2E 一大堆、单测没几个）在前后端都是反模式：跑得慢、定位难、动不动就 flaky。
-
-判断该写哪一层，记一句话：**逻辑分支多的用单测覆盖，"几层接起来对不对"用集成测试验证。** 比如 `svc-user` 的"扣配额"算法（够不够、扣多少、并发扣）适合单测；"POST /v1/draw 真的能把任务写进 MongoDB"适合集成测试。
-
----
-
-## 35.2 JUnit 5：和 jest 并排看
-
-JUnit 5 是 Java 的测试运行器 + 断言库，地位等同 `jest`。Spring Boot 项目里它已经随 `spring-boot-starter-test` 进来了，不用单独配。
-
-先看一个最朴素的单测——测 `cpt-common` 里的一个工具方法 `QuotaCalculator.deduct(balance, cost)`（计算扣配额后的余额，余额不足抛异常）：
-
-```java
-package com.aigen.common.util;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-class QuotaCalculatorTest {
-
-    private QuotaCalculator calculator;
-
-    @BeforeEach
-    void setUp() {
-        // 每个 @Test 方法执行前都会重新跑一次，保证用例之间互不影响
-        calculator = new QuotaCalculator();
-    }
-
-    @Test
-    @DisplayName("余额充足时，扣减后返回正确余额")
-    void deduct_enoughBalance_returnsRemaining() {
-        int remaining = calculator.deduct(100, 30);
-        assertEquals(70, remaining); // 期望值在前，实际值在后
-    }
-
-    @Test
-    @DisplayName("余额不足时，抛出 BizException")
-    void deduct_notEnough_throws() {
-        BizException ex = assertThrows(BizException.class,
-                () -> calculator.deduct(10, 30));
-        assertEquals(40010, ex.getCode()); // 顺便断言错误码
-    }
-}
-```
-
-把它和你熟悉的 `jest` 并排放：
-
-```typescript
-// jest 版本——对照着看，结构几乎一一对应
-describe('QuotaCalculator', () => {
-  let calculator: QuotaCalculator;
-
-  beforeEach(() => {            // ← @BeforeEach
-    calculator = new QuotaCalculator();
-  });
-
-  it('余额充足时返回正确余额', () => {       // ← @Test + @DisplayName
-    expect(calculator.deduct(100, 30)).toBe(70); // ← assertEquals
-  });
-
-  it('余额不足时抛异常', () => {
-    expect(() => calculator.deduct(10, 30))      // ← assertThrows
-      .toThrow(BizException);
-  });
-});
-```
-
-注解 / API 对照表（背这一张就够开始写了）：
-
-| JUnit 5 | jest | 作用 |
-| --- | --- | --- |
-| `@Test` | `it(...)` / `test(...)` | 标记一个测试方法 |
-| `@DisplayName("...")` | `it` 的描述字符串 | 用例的人类可读名字 |
-| `@BeforeEach` | `beforeEach` | 每个用例前都跑（重置状态） |
-| `@AfterEach` | `afterEach` | 每个用例后都跑（清理） |
-| `@BeforeAll` / `@AfterAll` | `beforeAll` / `afterAll` | 整个类只跑一次（注意要 `static`） |
-| `assertEquals(exp, act)` | `expect(act).toBe(exp)` | 相等断言（注意参数顺序相反！） |
-| `assertTrue` / `assertFalse` | `expect(x).toBe(true)` | 布尔断言 |
-| `assertNull` / `assertNotNull` | `toBeNull` / `toBeDefined` | 空值断言 |
-| `assertThrows(Ex.class, () -> ...)` | `expect(fn).toThrow()` | 断言抛异常 |
-| `@Disabled` | `it.skip` | 临时跳过 |
-
-> ⚠️ **最容易踩的坑**：`assertEquals` 是**期望值在前、实际值在后**（`assertEquals(70, remaining)`），和 `jest` 的 `expect(actual).toBe(expected)` 顺序正好相反。写反了不会报错，只是失败信息里的 "expected/actual" 会反过来，看着别扭。异常断言的细节可对照 [Java 异常机制](/back-end/java/05-exception)。
-
-### @ParameterizedTest：一份逻辑，多组数据
-
-前端你可能用 `it.each([...])` 跑数据驱动测试。JUnit 的对应物是 `@ParameterizedTest`：
-
-```java
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-
-@ParameterizedTest
-@DisplayName("扣配额：多组(余额,花费,期望剩余)")
-@CsvSource({
-        "100, 30, 70",
-        "50,  50, 0",
-        "999, 1,  998"
-})
-void deduct_variousInputs(int balance, int cost, int expected) {
-    assertEquals(expected, new QuotaCalculator().deduct(balance, cost));
-}
-```
-
-```typescript
-// jest 等价写法
-it.each([
-  [100, 30, 70],
-  [50, 50, 0],
-  [999, 1, 998],
-])('deduct(%i, %i) => %i', (balance, cost, expected) => {
-  expect(new QuotaCalculator().deduct(balance, cost)).toBe(expected);
-});
-```
-
-每组数据是一个独立用例，某一组挂了你能精确看到是哪组——比写一堆 `assertEquals` 强。
-
-跑测试的命令（对应你的 `npm test`）：
+前提是 JDK 17、Maven 3.6.3+；第一次解析依赖需要联网。从仓库根目录进入示例：
 
 ```bash
-# 跑全部测试
+cd examples/backend-task-api
 mvn test
-
-# 只跑某一个测试类
-mvn test -Dtest=QuotaCalculatorTest
-
-# 只跑某个类里的某个方法
-mvn test -Dtest=QuotaCalculatorTest#deduct_notEnough_throws
+# 缩小到一个测试类或一个方法
+mvn test -Dtest=TaskApiTest
+mvn test '-Dtest=TaskApiTest#protocolErrorsKeepTheirStatus'
 ```
 
-预期输出（绿了的样子）：
+测试导入手工创建的随机 H2 内存 DataSource，不绑定外部 datasource / Hikari 属性；test profile 固定，并关闭自动 SQL 初始化。执行本项目 schema 和每次清理前，都核验 JDBC 元数据必须等于本次随机 `jdbc:h2:mem:...`。不满足即失败，避免读者环境把初始化或 DELETE 指向外部库。仍不要主动改写隔离配置，**测试绝不能指向生产或共享业务库**。
+
+预期报告示意，不是本次编辑的执行结果：
 
 ```text
-[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
-[INFO] BUILD SUCCESS
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
 ```
 
-**怎么读**：`Failures` 是断言没通过（`assertEquals` 不相等），`Errors` 是用例里抛了没预期的异常（比如 NPE）。两者都为 0 才算过。失败时它会打印是哪个方法、期望 vs 实际，定位方式和 `jest` 输出一样。
+7 是当前 `@Test` 方法数，不是只有 7 个请求；几个方法在内部循环测试多种输入。`Failures` 表示断言失败，`Errors` 常表示未预期异常或测试上下文失败。出现错误先看第一个有效原因，不要直接删断言或跳过测试。
 
----
+## 2. 现有 7 个测试分别保护什么
 
-## 35.3 Mockito：给被测单元找替身
+| 真实方法名 | 现有断言覆盖的行为 |
+| --- | --- |
+| `createReadListUpdateDelete` | 创建 201、Location 与请求 ID 头、默认 TODO；查询、分页、PUT DONE；DELETE 204 空正文、重复删除 204、删除后 GET 404 |
+| `invalidTitleNeverWrites` | 空串、ASCII / Unicode 全空白、101 长度标题返回 400；错误有 requestId；非法创建不新增任务，Unicode 空白更新不改变原值 |
+| `malformedJsonAndInvalidEnumAre400` | 标题数字、布尔、null、缺失、数组，以及坏 JSON 返回 400；非法状态字符串和数字枚举返回 400 |
+| `pageBoundariesAreEnforced` | size 为 0 / 101、page 为 -1 / 10001 / 非数字时返回 400 |
+| `missingUpdateIs404` | 格式合法的 PUT 更新不存在任务返回 404 |
+| `protocolErrorsKeepTheirStatus` | PATCH 返回 405 并保留 Allow，text/plain 创建返回 415，不存在的路径返回 404 |
+| `sqlParametersDoNotBecomeSql` | 类似 SQL 注入的标题按普通文本保存，响应标题不变，任务表仍在且有一条记录 |
 
-### 为什么要 mock
+标题类型和数字枚举之所以被拒绝，还依赖主线 `JsonConfig` 的严格反序列化配置，**不是 String、enum 或校验注解天然保证**。测试把这项契约固定下来，避免框架默认转换悄悄改变输入含义。
 
-`NoteService.create()` 里调了 `noteRepository.save()`。如果单测真的去连 MongoDB：
+上述 SQL 用例是一条回归证据，不是完整安全审计；它不能证明所有未来查询、排序字段和动态 SQL 都没有注入风险。
 
-- **慢**：每次都要起数据库、清数据。
-- **不稳**：DB 没起来、网络抖动，测试就红，但这根本不是你代码的错。
-- **测不全**：想测"save 抛异常时 Service 怎么处理"，你很难让真 DB 按需抛错。
+## 3. 看懂装配：不是“把 HTTP 全 mock 掉”
 
-所以单测要把依赖换成**替身（mock）**：我让 `save()` 返回什么它就返回什么，让它抛错它就抛错。这样测试只聚焦"被测这一个类的逻辑对不对"，把 Repository、Feign 客户端、下游服务统统隔离掉。
-
-> 💡 **前端类比**：就是你写 `jest.mock('axios')` 然后 `mockedAxios.get.mockResolvedValue({ data: ... })` —— 不真发 HTTP，只测你的组件/函数拿到这个返回后干了什么。Mockito 就是 Java 版的 `jest.mock`。
-
-### 核心 API：when / thenReturn / verify
+源码的测试骨架如下，完整 imports 和全部方法在示例工程内：
 
 ```java
-// 1. 造一个替身
-NoteRepository repo = Mockito.mock(NoteRepository.class);
-
-// 2. 打桩（stub）：定义"被调用时返回什么"
-Mockito.when(repo.findById("abc")).thenReturn(Optional.of(someNote));
-
-// 3. 验证（verify）：断言"某方法被调用了几次、用什么参数"
-Mockito.verify(repo, times(1)).save(any(Note.class));
+@SpringBootTest(properties = {
+    "spring.datasource.url=jdbc:h2:mem:unused-test-bootstrap",
+    "spring.sql.init.mode=never", "spring.profiles.active=test"
+})
+@AutoConfigureMockMvc
+@Import(TaskApiTest.IsolatedDatabase.class)
+class TaskApiTest {
+    private static final String DATABASE_URL = "jdbc:h2:mem:task-api-tests-" + UUID.randomUUID();
+    // 同文件中的 IsolatedDatabase 手工创建未绑定属性的 DataSource，
+    // 校验精确 URL 后再执行本项目 schema.sql；此处省略该配置，不能删掉保护。
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper json;
+    @Autowired JdbcTemplate jdbc;
+    @BeforeEach void clean() throws Exception {
+        try (var connection = jdbc.getDataSource().getConnection()) {
+            assertThat(connection.getMetaData().getURL())
+                .startsWith("jdbc:h2:mem:").isEqualTo(DATABASE_URL);
+        }
+        jdbc.update("DELETE FROM tasks");
+    }
+    // 7 个真实测试方法
+}
 ```
 
-| Mockito | jest | 作用 |
+- `@SpringBootTest` 加载完整应用上下文；Controller、Service、Repository、JSON 配置和异常处理都真实参与。
+- `@AutoConfigureMockMvc` 提供 MockMvc，经模拟的 Servlet 请求调用应用；当前没有替换 Service 或 Repository 的 mock。
+- 默认测试不启动真实网络监听端口，所以不要求先启动 Tomcat，也**测不到** DNS、TCP、TLS、Nginx 或浏览器 CORS 执行结果。
+- H2 是真正执行 SQL 的嵌入式数据库，不是“伪造了所有 SQL 返回值”的替身，但它不是生产 MySQL。
+- `@BeforeEach` 在每个方法前清空测试表。现有用例依赖隔离数据库，不应依赖测试顺序或默认假设并行运行也安全。
+
+## 4. 一条断言只证明一件具体的事
+
+下面节选自现有 `protocolErrorsKeepTheirStatus`：
+
+```java
+@Test void protocolErrorsKeepTheirStatus() throws Exception {
+    mvc.perform(patch("/api/tasks/missing"))
+        .andExpect(status().isMethodNotAllowed())
+        .andExpect(header().exists("Allow"));
+    mvc.perform(post("/api/tasks")
+        .contentType(MediaType.TEXT_PLAIN).content("x"))
+        .andExpect(status().isUnsupportedMediaType());
+    mvc.perform(get("/no-such-route"))
+        .andExpect(status().isNotFound());
+}
+```
+
+`perform` 准备并发送请求，`andExpect` 检查可观察结果；这和前端用测试工具“发请求、断言响应”的思路相通。400 / 405 / 415 不是可以随便统一的失败，它们分别告诉调用方不同的修正方向。
+
+另一个例子来自删除流程：
+
+```java
+mvc.perform(delete("/api/tasks/{id}", id))
+    .andExpect(status().isNoContent())
+    .andExpect(content().string(""));
+```
+
+只断言 204 不足以验证“无正文”；也不要在客户端对 204 调 `response.json()`。同样，“非法标题返回 400”之外再查数据库为 0，才进一步证明没有意外写入。
+
+## 5. 单元、切片、集成、端到端怎样分工
+
+| 层次 | 想验证什么 | 测不到什么 |
 | --- | --- | --- |
-| `mock(Xxx.class)` | `jest.mock('xxx')` | 造替身 |
-| `when(x.foo()).thenReturn(v)` | `mockFn.mockReturnValue(v)` | 打桩返回值 |
-| `when(x.foo()).thenThrow(ex)` | `mockFn.mockRejectedValue(e)` | 打桩抛异常 |
-| `verify(x).foo()` | `expect(mockFn).toHaveBeenCalled()` | 验证被调用 |
-| `verify(x, times(2)).foo()` | `toHaveBeenCalledTimes(2)` | 验证调用次数 |
-| `verify(x, never()).foo()` | `not.toHaveBeenCalled()` | 验证从未调用 |
-| `any()` / `eq(v)` | `expect.anything()` / 具体值 | 参数匹配器 |
-
-### @Mock / @InjectMocks：少写样板
-
-每个测试都手动 `mock()` 太啰嗦。配合 `@ExtendWith(MockitoExtension.class)`，用注解自动织入：
+| 普通 JUnit 单元测试 | 纯规则、状态转换、服务在指定依赖结果下的行为 | Spring 装配、真实 SQL、事务代理 |
+| MVC 切片，如 `@WebMvcTest` | 路由、绑定、序列化与 Web 相关配置 | 被替换掉的业务和数据库实现 |
+| 当前 Spring + H2 集成测试 | 多层接线和已列出的接口 / SQL 行为 | MySQL 实际差异、真实网络与浏览器 |
+| 专门的 MySQL 集成测试 | 目标数据库的约束、时间、查询、事务 | 公网入口、完整用户浏览器流程 |
+| 授权环境的端到端测试 | 浏览器或客户端经真实入口完成关键流程 | 所有内部边界组合与所有并发交错 |
 
-- `@Mock`：给这个字段造一个替身。
-- `@InjectMocks`：创建被测对象，并把上面的 `@Mock` 自动注进它的构造器/字段。
+JUnit 提供测试生命周期、断言等；Mockito 可构造依赖替身。替身能模拟“查询不存在”“下游抛错”，但只能按设定回答，不能证明 SQL 正确。也不是所有单元测试都必须 mock：纯函数通常直接测输入输出。
 
-```java
-package com.aigen.user.service;
-
-import com.aigen.common.exception.BizException;
-import com.aigen.user.dto.NoteCreateDTO;
-import com.aigen.user.entity.Note;
-import com.aigen.user.repository.NoteRepository;
-import com.aigen.user.vo.NoteVO;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.Instant;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class) // 让 @Mock / @InjectMocks 生效
-class NoteServiceTest {
-
-    @Mock
-    private NoteRepository noteRepository;      // 替身：不连真 MongoDB
-
-    @InjectMocks
-    private NoteService noteService;            // 被测对象，repo 会被注进来
-
-    @Test
-    void create_shouldSetUidAndTimestamps_thenSave() {
-        // given：准备入参，并打桩 save 返回"落库后带 id 的对象"
-        NoteCreateDTO dto = new NoteCreateDTO();
-        dto.setTitle("我的笔记");
-        dto.setContent("从前端转后端");
-
-        Note saved = new Note();
-        saved.setId("6650f1c2a3b4c5d6e7f80912");
-        saved.setUid(10086L);
-        saved.setTitle("我的笔记");
-        saved.setContent("从前端转后端");
-        saved.setCreatedAt(Instant.now());
-        saved.setUpdatedAt(Instant.now());
-        when(noteRepository.save(any(Note.class))).thenReturn(saved);
-
-        // when：调被测方法
-        NoteVO vo = noteService.create(10086L, dto);
-
-        // then：断言返回值
-        assertEquals("6650f1c2a3b4c5d6e7f80912", vo.getId());
-        assertEquals(10086L, vo.getUid());
-
-        // 验证：真的调了一次 save，且传进去的对象 uid/createdAt 被正确设置了
-        ArgumentCaptor<Note> captor = ArgumentCaptor.forClass(Note.class);
-        verify(noteRepository, times(1)).save(captor.capture());
-        Note passedIn = captor.getValue();
-        assertEquals(10086L, passedIn.getUid());
-        assertNotNull(passedIn.getCreatedAt()); // Service 该补上创建时间
-    }
-
-    @Test
-    void getById_notFound_shouldThrowBizException() {
-        // 打桩：让 findById 返回空，模拟"查不到"
-        when(noteRepository.findById("not-exist")).thenReturn(Optional.empty());
-
-        BizException ex = assertThrows(BizException.class,
-                () -> noteService.getById("not-exist"));
-        assertEquals(40401, ex.getCode());
-
-        // 查不到时不应该再去写库
-        verify(noteRepository, never()).save(any());
-    }
-}
-```
-
-这就是后端单测最典型的样子：**给 Service mock 掉 Repository，验证 Service 的逻辑**。两个用例分别覆盖了"正常路径"和"异常路径"——后者用 `Optional.empty()` 模拟查不到，验证 Service 抛了正确错误码、且没有误写库。被测的 `NoteService` 就是 [写一个 CRUD 接口](/back-end/frontend-backend-guide/07-build-a-crud-api) 里那个。
-
-> 💡 **前端类比**：`@Mock NoteRepository` ≈ `const repo = { save: jest.fn(), findById: jest.fn() }`；`@InjectMocks NoteService` ≈ `new NoteService(repo)`（手动把 mock 当依赖传进去）。`ArgumentCaptor` 则像 `expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ uid: 10086 }))`——抓住"传给 mock 的实参"再做断言。
-
-**given / when / then 三段式**是后端测试的标准写法（前端叫 Arrange-Act-Assert），强烈建议用注释分隔，可读性高一大截。
-
----
-
-## 35.4 Spring 集成测试：起上下文、打接口
+用普通 `new TaskService(mockRepository)` 测规则时，Spring 事务代理不会因此启动，不能拿它证明事务回滚。MVC 切片也必须显式包含需要的配置，否则可能漏掉主线严格 JSON 配置。
 
-单测把依赖都 mock 了，但有些 bug 只有"真把几层接起来"才暴露：注解配错了、路由没注册、参数绑定失败、JSON 序列化把字段名写错了。这要靠**集成测试**——让 Spring 把 Bean 真正装配起来（容器与 Bean 的概念见 [Spring Boot 与 IoC/DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di)）。
+没有固定“70% 单测”配额：按失败风险、反馈速度和维护成本选层次；不要让少量慢 E2E 替代所有边界验证，也不要只测 mock 调用次数而不检查结果。
 
-### @WebMvcTest + MockMvc：只测 Web 层
+## 6. 从 H2 迁移 MySQL：需要新增什么证据
 
-`@WebMvcTest` 只加载 Controller 这一层（不碰数据库、不起整个应用），配合 `MockMvc` 模拟发 HTTP 请求、断言响应。Service 用 `@MockBean` 换成替身。
+主线的 H2 先降低 CRUD 门槛，生产持久化方向是 MySQL。**H2 测试全绿不证明 MySQL 已被验证**，MySQL 也不因容器能启动就自动正确。
 
-> `@MockBean` 和 `@Mock` 的区别：`@MockBean` 是"往 Spring 容器里塞一个替身 Bean"，会替换掉容器里真实的那个；`@Mock` 只是个普通替身，不进容器。在 Spring 集成测试里要用 `@MockBean`。
+后续用独立临时 MySQL 库或 Testcontainers 增加集成测试；后者需要额外测试依赖及 Docker，不是当前默认 7 个测试的组成部分。至少覆盖：
 
-```java
-package com.aigen.user.controller;
+- 目标 MySQL 版本上的 DDL、参数化 SQL、CHECK 与其他实际约束，测试缺失 / 重复 / 越界数据。
+- `createdAt` 的微秒精度和 UTC 时间点往返、中文和 emoji，连接与会话时区配置。
+- 真正跨连接的提交、回滚、并发更新、死锁或锁等待；验证最终数据，不只看异常是否出现。
+- 数据迁移后的接口契约、分页排序和重启持久化；执行计划、索引与性能预算另作有代表性数据量的验证。
 
-import com.aigen.user.service.NoteService;
-import com.aigen.user.vo.NoteVO;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+测试库使用独立账号与最小权限，临时数据可清理。不能把生产凭据复制给 CI；也不要把 `CREATE TABLE IF NOT EXISTS` 当成已经测试过的版本化迁移和回滚。
 
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+## 7. 未来的越权测试：现在没有，不要假装已经安全
 
-@WebMvcTest(NoteController.class) // 只装载这一个 Controller
-class NoteControllerTest {
+当前任务没有 owner_id、登录或用户隔离，任何调用者都能操作所有任务；**现有测试不能证明任何资源归属保护，不可直接公网部署**。
 
-    @Autowired
-    private MockMvc mockMvc;       // 模拟 HTTP 客户端，不真起 Tomcat
+接入 [安全设计](/back-end/frontend-backend-guide/32-security) 后，新增两名真实测试身份 A、B，并至少验证：
 
-    @Autowired
-    private ObjectMapper objectMapper; // 拼/解 JSON
+1. 未认证请求按方案返回 401；不能通过伪造 uid 头或 body 的 ownerId 获得身份。
+2. A 查询列表只看到 A 的任务；直接猜测 B 的 ID，也不能读取、修改、删除 B 的资源。
+3. 越权写操作按契约返回 403 或隐藏存在性的 404，并验证 **B 的数据完全未变**；不只断言状态码。
+4. Cookie 认证时补 CSRF 正反用例；跨源场景分别测预检响应头与实际请求权限，浏览器端再验证读取限制。
 
-    @MockBean
-    private NoteService noteService;   // Service 用替身，本测试只关心 Web 层
-
-    @Test
-    void getById_shouldReturnRtDataOk() throws Exception {
-        NoteVO vo = new NoteVO();
-        vo.setId("6650f1c2a3b4c5d6e7f80912");
-        vo.setTitle("我的笔记");
-        when(noteService.getById(eq("6650f1c2a3b4c5d6e7f80912"))).thenReturn(vo);
+复杂工作流、请求幂等键、更新版本检查也都尚未实现。补齐后再增加相应测试，不能用“重复 DELETE 通过”宣称所有写操作都可安全重试。
 
-        mockMvc.perform(get("/v1/note/6650f1c2a3b4c5d6e7f80912")
-                        .header("uid", "10086"))
-                .andExpect(status().isOk())                       // HTTP 200
-                .andExpect(jsonPath("$.code").value(0))           // RtData.code == 0
-                .andExpect(jsonPath("$.data.id").value("6650f1c2a3b4c5d6e7f80912"))
-                .andExpect(jsonPath("$.data.title").value("我的笔记"));
-    }
+## 动手与参考答案
 
-    @Test
-    void create_emptyTitle_shouldReturn400() throws Exception {
-        // 故意提交空标题，验证 @Validated 真的在拦
-        String body = "{\"title\":\"\",\"content\":\"内容\"}";
+1. **读测试**：运行 `mvn test`，再单独运行协议错误方法。预期完整类 7 个方法，单方法 1 个；当前报告若不同，先核对分支和源码，不要伪造输出。
+2. **补一个用例**：在实验副本中为默认分页增加断言。参考：先创建一条任务，GET `/api/tasks`，检查 page=0、size=20、total=1、items 数量为 1。新增独立 `@Test` 后总方法数应变为 8。
+3. **解释边界**：H2 测试通过，浏览器跨域请求仍失败，是否矛盾？参考：不矛盾，MockMvc 没有运行浏览器安全策略，也没有经过真实部署入口，应按 [网络与 HTTP](/back-end/frontend-backend-guide/22a-http-and-browser) 排查。
+4. **挑选测试层**：要证明“MySQL 同一幂等键并发只能创建一条”，能只 mock Repository 吗？参考：不能，未来须实现唯一约束和事务，再用真实 MySQL 多连接并发验证；mock 只能测局部分支。
 
-        mockMvc.perform(post("/v1/note")
-                        .header("uid", "10086")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest())               // HTTP 400
-                .andExpect(jsonPath("$.code").value(40000));
-        // 注意：被校验挡在门外，Service 根本没被调到
-    }
-}
-```
-
-`jsonPath("$.code")` 是用 JsonPath 语法（类似前端 `res.data.code`）从响应 JSON 里取值再断言。`$` 是根，`$.data.title` 就是 `data.title`。
+常见误解：测试多不等于风险全覆盖；覆盖率高不等于断言有效；MockMvc 不等于浏览器；H2 不等于 MySQL；没有权限模型时也就没有“越权已通过”的证据。
 
-> 💡 **前端类比**：`MockMvc` 就是后端版的 `supertest`——`mockMvc.perform(get(...))` ≈ `request(app).get(...)`，`andExpect(status().isOk())` ≈ `.expect(200)`，`jsonPath("$.code").value(0)` ≈ `.expect(res => expect(res.body.code).toBe(0))`。区别是它连 Tomcat 都不真起，所以飞快。
-
-### @SpringBootTest：起整个上下文
-
-需要测"多层真实串联"（比如 Controller→Service→真实 Repository，但 DB 用真实容器）时，用 `@SpringBootTest` 起完整应用上下文。它最接近真实运行环境，但也最慢——按需用，别全项目都套。
-
-```java
-@SpringBootTest                                    // 起整个 Spring 上下文
-@AutoConfigureMockMvc                              // 顺带配好 MockMvc
-class NoteFlowIntegrationTest {
-
-    @Autowired MockMvc mockMvc;
-
-    // 这里通常配合 Testcontainers 起真实 MongoDB（见下一节），
-    // 这样从 HTTP 请求一路到数据库落库全是真的
-}
-```
-
-`@WebMvcTest` vs `@SpringBootTest` 选哪个：
-
-| | 加载范围 | 速度 | 用途 |
-| --- | --- | --- | --- |
-| `@WebMvcTest` | 只 Controller + MVC 相关 Bean | 快 | 测路由/参数绑定/序列化/校验 |
-| `@SpringBootTest` | 整个应用上下文 | 慢 | 测多层真实串联、端到端流程 |
-
----
-
-## 35.5 Testcontainers：用 Docker 起真实依赖
-
-Mock 能隔离依赖，但有时你就是想验证"这条 MongoDB 查询语句到底对不对""Redis 的分布式锁脚本真能锁住吗"。Mock 替身永远只会返回你打桩的值，**测不出真实数据库的行为**（索引、唯一约束、查询语义）。
-
-**Testcontainers** 解决这个问题：测试启动时用 Docker **临时拉起一个真实的 MongoDB / Redis 容器**，测完自动销毁。比 mock 真，比手动装环境省心。
-
-> 💡 **前端类比**：有点像你用 `docker-compose` 起一个临时 Postgres 跑 e2e，只不过 Testcontainers 把"起容器/连上去/测完销毁"都收进测试代码里，跑 `mvn test` 时自动完成。前提是跑测试的机器上有 Docker（本地 Docker Desktop / CI 的 Docker daemon）。Docker 基础见 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice)。
-
-Maven 依赖（`pom.xml`，test 作用域）：
-
-```xml
-<dependency>
-    <groupId>org.testcontainers</groupId>
-    <artifactId>mongodb</artifactId>
-    <scope>test</scope>
-</dependency>
-<dependency>
-    <groupId>org.testcontainers</groupId>
-    <artifactId>junit-jupiter</artifactId>
-    <scope>test</scope>
-</dependency>
-```
-
-最小示例——起真实 MongoDB，测 `NoteRepository.findByUid` 这条派生查询是否真能按 uid 查出来：
-
-```java
-package com.aigen.user.repository;
-
-import com.aigen.user.entity.Note;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.time.Instant;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-@Testcontainers
-@DataMongoTest // 只加载 MongoDB 相关 Bean（Repository 层），比 @SpringBootTest 轻
-class NoteRepositoryIntegrationTest {
-
-    // 测试开始时自动 docker run 一个 mongo:6 容器，结束自动销毁
-    @Container
-    static MongoDBContainer mongo = new MongoDBContainer("mongo:6.0");
-
-    // 把容器随机分配的连接串注入 Spring 配置（端口是动态的，不能写死）
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
-    }
-
-    @Autowired
-    private NoteRepository noteRepository;
-
-    @Test
-    void findByUid_shouldReturnOnlyThatUsersNotes() {
-        // given：塞两个用户的数据
-        noteRepository.save(makeNote(10086L, "A"));
-        noteRepository.save(makeNote(10086L, "B"));
-        noteRepository.save(makeNote(99999L, "别人的"));
-
-        // when：查 uid=10086
-        Page<Note> page = noteRepository.findByUid(10086L, PageRequest.of(0, 10));
-
-        // then：只应该查到 2 条（真实 DB 才能验证查询条件对不对）
-        assertEquals(2, page.getTotalElements());
-    }
-
-    private Note makeNote(Long uid, String title) {
-        Note n = new Note();
-        n.setUid(uid);
-        n.setTitle(title);
-        n.setContent("x");
-        n.setCreatedAt(Instant.now());
-        n.setUpdatedAt(Instant.now());
-        return n;
-    }
-}
-```
-
-第一次跑会先拉镜像，输出类似：
-
-```text
-[INFO] ... Creating container for image: mongo:6.0
-[INFO] ... Container mongo:6.0 started in PT3.214S
-[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
-[INFO] BUILD SUCCESS
-```
-
-**怎么读**：看到 `Container mongo:6.0 started` 就说明 Testcontainers 真的拉起了 MongoDB；测试跑完容器自动停掉，你 `docker ps` 已经看不到它了。`findByUid` 真的只查出 2 条而不是 3 条，证明派生查询的过滤条件正确——这是 mock 永远测不到的真实行为。同理把 `MongoDBContainer` 换成 `GenericContainer("redis:7")` 就能测 `svc-user` 的 Redis 限流 / 分布式锁逻辑（Redis 用法见 [Redis 实战](/back-end/frontend-backend-guide/12-redis-in-practice)）。
-
-> ⚠️ Testcontainers 慢且依赖 Docker，所以**只给"真实依赖行为"写它**（DB 查询、唯一约束、Redis 脚本），别拿它替代单测。CI 里跑这类测试要确保 runner 装了 Docker。
-
----
-
-## 35.6 一个完整的"扣配额"测试场景
-
-把前面几节串起来，看一个贴近业务的例子：`svc-user` 的 `submitDrawTask` —— 提交生图任务前先扣配额，配额不足直接拒绝。逻辑分支多，是单测的最佳目标：
-
-```java
-@ExtendWith(MockitoExtension.class)
-class DrawQuotaServiceTest {
-
-    @Mock UserQuotaRepository quotaRepository;
-    @Mock CanvasFeignClient canvasClient;        // 下游 svc-canvas，mock 掉
-    @InjectMocks DrawQuotaService drawQuotaService;
-
-    @Test
-    void submit_quotaEnough_shouldDeductAndCallCanvas() {
-        when(quotaRepository.getBalance(10086L)).thenReturn(50);
-        when(canvasClient.createTask(any())).thenReturn("task-001");
-
-        String taskId = drawQuotaService.submitDrawTask(10086L, "一只猫");
-
-        assertEquals("task-001", taskId);
-        verify(quotaRepository).deduct(10086L, 10);   // 扣了 10
-        verify(canvasClient, times(1)).createTask(any());
-    }
-
-    @Test
-    void submit_quotaNotEnough_shouldRejectAndNotCallCanvas() {
-        when(quotaRepository.getBalance(10086L)).thenReturn(5); // 不够
-
-        BizException ex = assertThrows(BizException.class,
-                () -> drawQuotaService.submitDrawTask(10086L, "一只猫"));
-        assertEquals(40010, ex.getCode());
-
-        // 关键：配额不足时，绝不能扣费、也绝不能调下游建任务
-        verify(quotaRepository, never()).deduct(anyLong(), anyInt());
-        verify(canvasClient, never()).createTask(any());
-    }
-}
-```
-
-第二个用例特别能体现 `verify(..., never())` 的价值：它断言的是"**没发生**什么"。配额不足时如果代码 bug 导致仍然调了 `canvasClient.createTask`，就会白白占用 GPU 资源还可能重复计费——这种 bug 靠肉眼 review 容易漏，靠测试一抓一个准。这就是下一节要讲的"测行为"。
-
----
-
-## 35.7 测试心法：少而精
-
-工具会了，更重要的是知道"测什么、怎么测才不白写"。
-
-**1. 测行为，不测实现。** 断言"输入 X 得到输出 Y / 产生副作用 Z"，而不是"内部调了哪个私有方法、用了什么循环"。前者在你重构内部实现时依然成立，后者一重构就全红——测试反而成了改代码的阻力。
-
-> 💡 **前端类比**：和 `@testing-library` 的核心理念一字不差——"测用户看到/能做的，别测组件内部 state"。后端就是"测接口返回 + 副作用，别测私有方法"。
-
-**2. 优先覆盖核心业务和边界。** 不必追求 100% 覆盖率（覆盖 getter/setter 毫无意义）。把测试预算花在：钱相关（扣配额、支付）、权限校验、边界值（0、负数、空、超长、并发）、异常分支。`submitDrawTask` 这种就值得多写几个用例。
-
-**3. 可重复、无副作用、不依赖顺序。** 每个用例都该能单独跑、反复跑、结果一致。别让用例 A 依赖用例 B 先跑过（用 `@BeforeEach` 重置状态），别依赖当前时间/随机数（需要时把 `Clock`、随机源也注入进来好 mock），别真发邮件/真扣款。
-
-> 💡 **前端类比**：就是 `jest` 里"每个 `it` 独立、`beforeEach` 重置、别依赖真实网络"那套规矩。flaky test（时绿时红）在前后端都是头号公敌——它会慢慢腐蚀整个团队对测试的信任。
-
-**4. 测试名要会说话。** `deduct_notEnough_throws` 比 `test1` 强一万倍。推荐 `方法_场景_期望` 三段式命名，失败时光看名字就知道哪个场景挂了。
-
-**5. 别为了覆盖率写假测试。** 没有断言的测试（只调方法不 assert）等于没测，但覆盖率工具会把它算成"覆盖了"——这是自欺欺人。一个有意义的断言胜过十行没断言的调用。
-
----
-
-## 小结
-
-- 测试金字塔：**单元（多/快）→ 集成（中）→ E2E（少/慢）**，后端重点是单元 + 集成；倒金字塔是反模式。
-- **JUnit 5** ≈ jest：`@Test/@BeforeEach/assertEquals/assertThrows` 一一对应 `it/beforeEach/expect/toThrow`，注意 `assertEquals` 期望值在前。`@ParameterizedTest` 就是 `it.each`。
-- **Mockito** ≈ jest.mock：用 `@Mock` 造替身、`@InjectMocks` 注入被测对象，`when().thenReturn()` 打桩、`verify()` 验证调用。单测 mock 掉 Repository/Feign，只测被测类自己的逻辑。
-- **Spring 集成测试**：`@WebMvcTest` + `MockMvc` 测 Web 层（≈ supertest），`@SpringBootTest` 起整个上下文测真实串联，`@MockBean` 往容器里塞替身。
-- **Testcontainers** 用 Docker 临时起真实 MongoDB/Redis，验证 mock 测不出的真实数据库行为；慢且依赖 Docker，只给关键集成场景用。
-- 心法：**测行为不测实现、覆盖核心与边界、可重复无副作用、名字会说话、拒绝没断言的假测试**。
-
-### 自测
-
-1. `svc-user` 的 `submitDrawTask`（先查余额→够则扣配额并调 `svc-canvas`→不够则抛异常），你会用单元测试还是集成测试？要 mock 哪几个依赖？至少写出两个该覆盖的用例场景。
-2. `@Mock` 和 `@MockBean` 有什么区别？什么时候必须用 `@MockBean`？
-3. 你想验证 `NoteRepository.findByUid` 这条 MongoDB 派生查询真的只返回指定用户的数据，应该用 Mockito mock 掉 Repository，还是用 Testcontainers 起真实 MongoDB？为什么 mock 在这里行不通？
-
-### 下一章
-
-测试绿了只是第一步——下一章 [CI/CD 与部署](/back-end/frontend-backend-guide/36-cicd-deployment) 会讲怎么把"跑测试 → 构建镜像 → 部署上线"接成一条自动化流水线，让每次 push 都自动验证并发布。
+下一站：[CI/CD 与部署](/back-end/frontend-backend-guide/36-cicd-deployment)，把已明确范围的验证放到流水线；回到 [API 设计](/back-end/frontend-backend-guide/34-api-design)，为每一个新承诺安排对应的测试与环境。

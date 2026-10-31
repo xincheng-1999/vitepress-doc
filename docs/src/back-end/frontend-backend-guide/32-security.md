@@ -1,420 +1,223 @@
-# 安全
-
-> 上一章我们把性能和高并发的家底盘了一遍。这一章聊一个永远不能省、出事就上头条的话题：安全。作为前端你已经接触过 XSS、CSRF、CORS、HTTPS 这些词——那一面墙是"浏览器侧"的防御。这一章我们站到服务端这一侧，把同一批威胁重新看一遍，并且记住一条贯穿全章的铁律：**前端校验只为体验，后端必须再校验一遍**。
-
-如果你对 XSS、CSRF、CSP 这些概念还没建立感性认识，强烈建议先回顾前端视角的 [前端 Web 安全](/front-end/the-basics/network-basics/webSafety)。本章不再重复攻击的浏览器细节，重点放在"后端能做、且必须做"的对策上。
-
+---
+prev:
+  text: "C2. 事务与并发更新"
+  link: "/back-end/frontend-backend-guide/11-transactions-consistency"
+next:
+  text: "C4. 实验：Session 登录与隔离"
+  link: "/back-end/frontend-backend-guide/32a-session-login-lab"
 ---
 
-## 32.1 先分清两个词：认证 vs 授权
+# 32. 登录与安全：谁在操作，凭什么允许
 
-后端安全聊得最多的两个词长得很像，但解决的是完全不同的问题：
+## 学习目标
 
-- **认证（Authentication）**：你是谁？——核验身份。登录就是认证：用账号密码、验证码、token 证明"我是 uid=10001 这个人"。
-- **授权（Authorization）**：你能干啥？——核验权限。你证明了身份，但能不能删别人的画布、能不能调管理员接口，是授权要管的事。
+读完本章，你应该能：
 
-**前端类比**：路由守卫里你可能写过两段逻辑——`if (!isLogin) redirect('/login')` 是认证；`if (!user.isAdmin) redirect('/403')` 是授权。前端那一层只是"不给你看入口"，真正拦住你的必须是后端。
+- 为一个浏览器应用选择 Session 或 JWT，而不是看到“前后端分离”就默认 JWT。
+- 把身份认证、动作授权、数据归属校验放在正确的服务端边界。
+- 解释密码哈希、CSRF、XSS、CORS 分别防什么，以及刷新、注销究竟使什么失效。
+- 识别 MFA、OAuth2、OIDC、SSO 的用途，知道哪些部分应交给成熟组件。
 
-```text
-                  认证 Authentication              授权 Authorization
-                  "你是谁"                          "你能干啥"
-  匿名请求  ──►  [校验 token/密码]  ──► 已知身份 ──►  [校验角色/资源归属]  ──► 放行
-                       │ 失败                              │ 失败
-                       ▼                                   ▼
-                  401 Unauthorized                    403 Forbidden
-```
+贯穿场景是 **Java 17 + Spring Boot 3.x 的单体 `task-api`**，本地监听 `8080`，任务入口为 `/api/tasks`。第一课可用 H2，持久化主线使用 MySQL；本章是在 CRUD 跑通后加安全，不要求先拆认证微服务。
 
-记住这个对应关系：身份没通过返回 **401**，身份通过了但权限不够返回 **403**。本项目里 svc-gateway 负责粗粒度认证（token 真不真），各业务服务负责细粒度授权（这条数据是不是你的）。
+::: warning 教学示例不是完整登录系统
+下面的 SQL、配置片段用于说明边界。不要复制几段代码就公开上线：应使用 Spring Security 的认证、会话、CSRF 和密码编码组件，结合测试验证。不要自己发明签名算法、验证码协议或密码重置协议。
+:::
 
-> ⚠️ 最常见的错误是"只做了认证，忘了授权"。登录态校验通过 ≠ 你能操作任意资源。下文的 IDOR 越权就是这个坑的典型。
+**想跟做而不是只看概念？** 读完本章后进入 [Session 登录与 A/B 数据隔离实验](./32a-session-login-lab)：提供真实 Spring Security 配置、两位本地演示用户、CSRF 获取、Cookie 登录退出、可信 principal 与 owner 查询，附 16 个自动测试。不要求你先凭空搭好登录系统。
 
----
+## 32.1 先画清三个检查点
 
-## 32.2 JWT：无状态的身份令牌
+需求：“小林能改自己的任务，不能通过修改 URL 删除小陈的任务。”这至少包含三层检查。
 
-本项目 svc-auth 登录成功后，发给前端的就是一个 JWT（JSON Web Token）。理解它的结构和边界，是看懂整条登录链路的前提。
+| 检查 | 问的问题 | `task-api` 中的最小实现 |
+| --- | --- | --- |
+| 认证 Authentication | 请求者是谁？ | Spring Security 校验会话或访问令牌，建立可信的 principal |
+| 授权 Authorization | 这个人是否允许执行这个动作？ | 普通用户可改自己的任务；管理员权限单独定义 |
+| 数据归属 / 数据范围 | 这个具体任务是否在允许的数据集合内？ | 查询、更新、删除都带当前用户 ID；多租户时还带租户范围 |
 
-### 结构：三段，用点隔开
+![从不可信请求到认证、授权与数据归属的安全检查点](/backend-guide/features-security-boundaries.svg)
 
-一个 JWT 长这样（为了看清，按点换了行）：
+浏览器隐藏按钮不是授权；UUID 难猜也不是授权；接口已经登录不代表可以操作任意 ID。未认证一般返回 `401`，身份已确认但动作被禁止一般返回 `403`。资源接口也可以统一返回 `404` 隐藏资源是否存在，但必须在接口契约中保持一致。
 
-```text
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9      ← header（算法、类型）
-.
-eyJ1aWQiOjEwMDAxLCJyb2xlIjoidXNlciIsImV4cCI6MTcxNzIzMDQwMH0   ← payload（声明/claims）
-.
-S0meBase64UrlSignatureXXXXXXXXXXXXXXXXXXX  ← signature（签名）
-```
+**可信身份从哪里来？** 从安全框架已验证的会话或令牌进入 `SecurityContext`。以下内容都不能直接当身份：请求体的 `ownerId`、查询参数 `uid`、客户端自带的 `X-User-Id`、仅被 Base64 解码但没有验证的 JWT。以后即便引入网关，也必须限制业务服务只能由可信入口访问，剥离外部伪造头并认证入口，不能因为名字叫“内部头”就相信。
 
-三段都是 Base64Url 编码（注意：**只是编码，不是加密**），用 `.` 连接：
-
-1. **header**：声明签名算法，如 `{"alg":"HS256","typ":"JWT"}`。
-2. **payload**：放业务声明（claims），如 `{"uid":10001,"role":"user","exp":1717230400}`。`exp` 是过期时间戳。
-3. **signature**：用服务端密钥对 `header.payload` 做 HMAC 签名。这是 JWT 防伪造的核心。
-
-你可以亲手解开 payload 看看——任何人都能解，这正是重点：
-
-```bash
-# 把中间那段 payload 用 base64 解码（jwt 用的是 URL-safe base64）
-echo 'eyJ1aWQiOjEwMDAxLCJyb2xlIjoidXNlciIsImV4cCI6MTcxNzIzMDQwMH0' | base64 -d
-```
-
-预期输出：
-
-```text
-{"uid":10001,"role":"user","exp":1717230400}
-```
-
-**怎么读这段输出**：不需要任何密钥就还原出了明文 payload。**结论**：payload 是公开可读的，**绝对不能放密码、手机号明文、支付密钥**这类敏感信息。它能放的只是"无所谓被看见"的标识，如 uid、role。
-
-**前端类比**：JWT 很像你在前端拿到后存进 `localStorage` 的那串 token。你可能用过 `jwt-decode` 在前端解出里面的 uid 来渲染——那恰恰证明了 payload 是明文。前端解出来用于显示没问题，但**前端解出来的 role 绝不能作为权限依据**，权限必须由后端校验签名后认定。
-
-### 无状态：服务端凭什么信它
-
-传统 session 方案，服务端要存一份"谁登录了"的表（或放 Redis），每次请求查表。JWT 反过来——服务端**不存**任何东西，只做一件事：用密钥重新算一遍签名，和 token 带来的签名比对。
-
-```java
-// svc-auth / cpt-common 里的校验逻辑（简化）
-public Claims verify(String token) {
-    return Jwts.parserBuilder()
-            .setSigningKey(secretKey)          // 密钥来自配置，不在代码里
-            .build()
-            .parseClaimsJws(token)             // 验签 + 校验 exp，失败抛异常
-            .getBody();
-}
-```
-
-只要签名对得上，说明这个 token 确实是 svc-auth 用同一把密钥签发的、且内容没被篡改过。攻击者就算把 payload 改成 `"role":"admin"`，因为它没有密钥，算不出匹配的签名，验签必然失败。
-
-**前端类比**：像 axios 拦截器里给每个请求带上 `Authorization: Bearer <token>`，后端拿到后"验章"。无状态的好处是 svc-* 任何一个实例都能独立验签，不用共享 session，水平扩容很省心（呼应 [Kubernetes 实战](/back-end/frontend-backend-guide/24-kubernetes-in-practice) 里的多副本）。
-
-> ⚠️ HS256 用的是对称密钥（签发和验签同一把），所以这把密钥泄露 = 任何人都能伪造任意身份的 token，等于整个认证体系沦陷。密钥管理见 32.7。
-
-### 过期与刷新：access token + refresh token
-
-JWT 一旦签发，服务端无法主动作废（因为不存状态）。所以不能签一个永久 token。本项目的做法是双 token：
-
-- **access token**：有效期短（如 15 分钟），每次业务请求都带它。
-- **refresh token**：有效期长（如 7 天），只在 access 过期时用来换新的 access，且存在 Redis 里可被吊销。
-
-```text
-登录  ──► svc-auth 发 access(15min) + refresh(7d)
-                                  │
-业务请求带 access ──► 校验通过 ──► 正常返回
-                                  │ access 过期(401, 特定错误码)
-前端用 refresh 调 /auth/refresh ──► svc-auth 查 Redis 里 refresh 是否有效
-                                  │ 有效 ──► 发新 access
-                                  │ 无效/已吊销 ──► 强制重新登录
-```
-
-**前端类比**：你大概率写过 axios 响应拦截器——遇到 401（access 过期）时，自动拿 refresh 静默换一个新 access、重放原请求，用户无感。退出登录时，后端把 Redis 里的 refresh 删掉，这个会话就真正失效了（这就是无状态 JWT 找回"可吊销"能力的办法）。
-
-### OAuth2 一句话直觉
-
-"用微信/GitHub 登录"背后是 OAuth2 的**授权码流程**。直觉是：你不把微信密码给我们的应用，而是去微信那边登录、同意授权，微信给我们一个一次性的 **code**，我们后端拿 code 去微信换 token，再用 token 去拿你的昵称头像。核心思想是**密码不离开可信方，第三方只拿到有限授权的令牌**。本项目自建认证为主，OAuth2 用于接入第三方登录时才需要。
-
----
-
-## 32.3 密码存储铁律：绝不明文，绝不可逆
-
-这是后端最不能犯的错误，没有之一。数据库被拖库是常态，区别只在于"拖走后攻击者能不能登录你的用户"。
-
-铁律分三条：
-
-1. **绝不明文**。明文存密码，拖库即全军覆没。
-2. **绝不用可逆加密**。能解密就等于明文（密钥也会泄露）。要用**单向哈希**。
-3. **不能用裸 MD5/SHA**。它们太快了，攻击者用彩虹表/GPU 每秒能试上亿次。要用**专为密码设计的慢哈希**：bcrypt 或 Argon2，并且**加盐**。
-
-"加盐"就是给每个用户的密码拼一段随机串再哈希，这样两个人即使用同样的密码，哈希结果也不同，彩虹表直接失效。bcrypt 会自动把盐和计算成本一起编进结果里。
-
-```java
-// cpt-common 里基于 Spring Security 的密码编码器
-@Bean
-public PasswordEncoder passwordEncoder() {
-    // 参数 10 是 cost（计算强度），越大越慢越安全，生产常用 10~12
-    return new BCryptPasswordEncoder(10);
-}
-```
-
-注册和登录这样用：
-
-```java
-@Service
-public class AuthService {
-    @Autowired private PasswordEncoder passwordEncoder;
-    @Autowired private UserRepository userRepository;
-
-    // 注册：只存哈希，永远不存明文
-    public RtData<Void> register(String username, String rawPassword) {
-        String hash = passwordEncoder.encode(rawPassword);
-        userRepository.save(new User(username, hash));
-        return RtData.ok(null);
-    }
-
-    // 登录：用 matches 比对，不要自己再 encode 一次去 equals
-    public RtData<String> login(String username, String rawPassword) {
-        User user = userRepository.findByUsername(username);
-        // 用户不存在也走一次 matches，避免靠响应时间猜出用户名是否存在
-        if (user == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            return RtData.fail("用户名或密码错误");   // 注意：不区分是哪个错
-        }
-        return RtData.ok(jwtService.issue(user));
-    }
-}
-```
-
-把一个 bcrypt 哈希打出来感受一下：
-
-```text
-$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
-└┬┘└┬┘└──────────┬──────────┘└──────────────┬──────────────┘
- │  │            盐(salt)                  哈希值
- │  cost=10
- 算法标识(2a=bcrypt)
-```
-
-**怎么读**：盐和 cost 都明文写在结果里，所以验证时 bcrypt 能用同样的盐和 cost 重算。**结论**：你只需要存这一整串，不用自己额外管理盐。
-
-**前端类比**：你可能在前端对密码做过一次哈希再传——那只能防"传输过程被窥看"（而且有 HTTPS 后基本没必要），**绝不能替代后端的存储哈希**。前端哈希后的值对后端来说就是新的"明文密码"，照样要再 bcrypt 一遍。
-
-> ⚠️ 登录失败时统一返回"用户名或密码错误"，不要分别提示"用户不存在""密码错误"——后者会被用来枚举有效用户名。
-
----
-
-## 32.4 常见漏洞与后端对策（逐个击破）
-
-下面这些是后端必须能随口说出对策的高频漏洞。每个都给"危险写法 → 正确写法"。
-
-### SQL 注入：绝不拼接 SQL
-
-危险写法——把用户输入直接拼进 SQL 字符串：
-
-```java
-// ❌ 致命写法：username 传 ' OR '1'='1 就能绕过，传 '; DROP TABLE 就能删库
-String sql = "SELECT * FROM user WHERE username = '" + username + "'";
-jdbcTemplate.queryForList(sql);
-```
-
-正确写法——**参数化查询**，让数据库把 `?` 的内容当纯数据，而非 SQL 代码：
-
-```java
-// ✅ 参数化：无论 username 里有什么，都只是个值，不会被当成 SQL 执行
-jdbcTemplate.queryForList(
-    "SELECT * FROM user WHERE username = ?", username);
-```
-
-用 MyBatis 时同理：`#{}` 是参数化（安全），`${}` 是字符串拼接（危险，几乎只在动态表名/排序字段时才用，且要白名单校验）。
+最小的数据访问边界可以是：
 
 ```sql
--- MyBatis: 用 #{} 不要用 ${}
-SELECT * FROM ai_task WHERE uid = #{uid} AND status = #{status}
+-- :currentUserId 是服务端已认证 principal 的 ID，不来自请求体
+SELECT id, title, status
+FROM tasks
+WHERE id = :taskId AND owner_id = :currentUserId;
+
+UPDATE tasks SET title = :title
+WHERE id = :taskId AND owner_id = :currentUserId;
 ```
 
-**前端类比**：相当于把"参数"和"指令"分开传，类似你用 axios 传 `params: { keyword }` 而不是自己手拼 query string 里的特殊字符。**对策总结**：永远用 ORM / 参数化查询，永远不要把用户输入拼进 SQL。本项目主库是 MongoDB，同样不要把用户输入拼进查询条件对象，用驱动提供的参数化方式。SQL 细节见 [SQL 与索引](/back-end/frontend-backend-guide/10-sql-and-indexes)。
+参数由数据库库的绑定机制传入，不是字符串替换。修改语句检查影响行数，为 `0` 时按契约返回不存在或禁止访问。先查归属再按裸 ID 更新会引入检查与使用之间的竞态；能把范围条件写进更新语句，就不要只依赖先前的一次检查。管理员、协作者的范围规则应集中在业务授权逻辑中，不要散落十几处 `if`。
 
-### XSS：后端也要防存储型
+角色授权 RBAC、属性授权 ABAC 和多租户隔离的具体需求，见 [后端功能地图](/back-end/frontend-backend-guide/39-backend-feature-map#collaboration)。
 
-前端那一章讲过反射型/DOM 型 XSS，主要靠浏览器侧的 `innerText`、CSP、框架默认转义来防。但有一种 **存储型 XSS** 后端责任最大：用户把 `<script>` 塞进画布标题或 prompt，存进数据库，下次别人浏览时被渲染执行。
+## 32.2 Session 与 JWT：先选适合的会话方式
 
-后端对策有两层，重点是第二层：
+### 浏览器单体先考虑 Session
 
-```java
-// 输出/存储时对富文本做净化，剥掉 <script>、onerror 等危险内容
-// 用成熟库（如 OWASP Java HTML Sanitizer），不要自己写正则黑名单
-String safe = htmlSanitizer.sanitize(userInput);
-```
-
-- **输出编码**：返回给页面渲染的内容做 HTML 转义（`<` → `&lt;`），让脚本变成纯文本显示。
-- **存储净化**：如果业务允许富文本（如带格式的描述），存库前用白名单净化器只保留安全标签。
-
-**前端类比**：React/Vue 默认会对插值转义，所以你平时很少手动处理；但只要用了 `dangerouslySetInnerHTML` / `v-html`，这层保护就没了。后端不能假设前端一定安全渲染——别的客户端、邮件、导出 PDF 都可能直接渲染你存的内容，所以**存进去的就该是干净的**。
-
-### CSRF：token + SameSite
-
-CSRF 是诱导已登录用户在不知情下发出请求（借用浏览器自动带 Cookie 的特性）。后端对策：
-
-- **如果用 Cookie 存登录态**：给 Cookie 设 `SameSite=Lax` 或 `Strict`，并对写操作校验 CSRF token（同步令牌模式）。
-- **如果用 Authorization 头带 JWT**（本项目方案）：天然基本免疫 CSRF——因为攻击者的跨站请求无法读到你 localStorage 里的 token、也就无法主动加上 `Authorization` 头。这是很多前后端分离项目用 header token 而非 Cookie 的原因之一。
+登录成功后，服务端保存会话状态，把**不可预测的会话 ID**放进 Cookie。浏览器随后自动携带 Cookie，服务端根据 ID 找到身份。不要把密码或完整用户对象放到 Cookie 中。
 
 ```text
-Set-Cookie: refreshToken=xxx; HttpOnly; Secure; SameSite=Strict; Path=/auth
-            └──────┬──────┘  └──┬──┘ └─┬─┘ └────┬─────┘
-            不让 JS 读(防 XSS 偷) 只走HTTPS  跨站不带  限制路径
+浏览器 → POST /api/auth/login → Spring Security 验证凭据
+       ← Set-Cookie: 会话 ID
+浏览器 → GET /api/tasks + 会话 Cookie → 服务端查会话 → 校验数据范围
 ```
 
-**前端类比**：你设过 axios 的 `withCredentials`、遇到过浏览器对 Cookie 的 SameSite 限制——后端就是在 `Set-Cookie` 里把这些防护开关打开的那一方。
+对同站点的 `task-api`，Session 是足够好的起点：容易主动注销、封禁和调整权限。单机可先用受控的内存会话；进程重启后需要重新登录是明确的边界。多实例时再评估共享会话存储、可用性与成本，不必第一天就上 Redis。
 
-### IDOR 越权：查数据必须校验归属
+生产 Cookie 应结合部署设置 `HttpOnly`、`Secure`、合适的 `SameSite`、作用域及过期策略。`HttpOnly` 阻止页面 JS 读取 Cookie，不会阻止 XSS 以用户身份发请求。`Secure` 要求 HTTPS；本地 `http://localhost:8080` 调试与生产配置要分开，不能为“本地能跑”关掉生产保护。登录后更新会话标识防会话固定，设置空闲及绝对有效期，密码变更后按策略撤销旧会话。
 
-这是最隐蔽、最高发、也最该警惕的漏洞。IDOR（不安全的直接对象引用）：接口只校验了"你登录了"（认证），没校验"这条数据是不是你的"（授权）。
+### JWT 是令牌格式，不是浏览器存储方案
 
-危险写法——只信前端传来的 id：
+JWT 是承载声明的格式。常见签名 JWT（JWS 紧凑形式）由 `header.payload.signature` 三段组成。前两段是 Base64URL 编码，**可读而非保密**；签名保护完整性，不让攻击者随意修改身份，不负责隐藏内容。JWT 也存在加密形式，但不要因此以为常见 access token 的 payload 已加密。
 
-```java
-// ❌ 用户传 taskId=任意值，就能查/删别人的任务
-@GetMapping("/canvas/task/{taskId}")
-public RtData<TaskVO> getTask(@PathVariable String taskId) {
-    return RtData.ok(taskService.findById(taskId));   // 没校验归属！
-}
-```
+资源服务应通过成熟库验证：允许的算法、签名与可信密钥、签发方 `iss`、目标受众 `aud`、有效期 `exp`，以及按协议要求检查 `nbf` 等。不能听信 token 自己声明的任意算法或任意密钥地址。合法签名也不等于当前仍有权限：账号可能已被封禁、角色可能已被撤销。
 
-正确写法——把当前登录用户的 uid 作为查询条件，让"归属校验"发生在数据层：
-
-```java
-// ✅ uid 来自 token（后端可信），不是前端传的；查不到就是越权或不存在
-@GetMapping("/canvas/task/{taskId}")
-public RtData<TaskVO> getTask(@PathVariable String taskId) {
-    Long uid = SecurityContext.currentUid();          // 从已验签的 token 取
-    Task task = taskService.findByIdAndUid(taskId, uid);
-    if (task == null) {
-        return RtData.fail("任务不存在");               // 不暴露"存在但不是你的"
-    }
-    return RtData.ok(TaskVO.from(task));
-}
-```
-
-**关键点**：身份信息（uid、role）必须来自**后端验签后的 token**，绝不能信任前端请求体/参数里传来的 uid。前端传 `uid` 只能用来做 UI，后端要用自己认定的 uid 覆盖它。
-
-**前端类比**：你在前端可能根据 `currentUser.id === task.ownerId` 来决定显不显示"删除"按钮——那只是"不给看按钮"，攻击者直接 curl 你的接口、把 taskId 改成别人的照样能打。**所以后端必须独立做归属校验**。
-
-### 敏感信息泄露：日志和响应都别带
-
-两个最容易漏的出口：
-
-```java
-// ❌ 日志里打了密码/token，日志一旦被读到就泄露
-log.info("login req: {}", JSON.toJSONString(loginReq)); // loginReq 含明文密码
-
-// ✅ 脱敏后再打，或干脆只打非敏感字段
-log.info("login attempt: username={}", loginReq.getUsername());
-```
-
-- **响应**：返回用户对象时，DTO 里绝不能带 `passwordHash`、`refreshToken`、内部 OSS 密钥。用专门的 VO/DTO 出参，不要把数据库实体直接序列化返回（呼应 [三层架构](/back-end/frontend-backend-guide/04-three-layer-and-structure)）。
-- **日志**：手机号、身份证、token、密码一律脱敏（如 `138****8000`）。日志怎么看见 [看日志](/back-end/frontend-backend-guide/26-reading-logs)。
-- **报错**：生产环境别把堆栈、SQL、内部 IP 直接吐给前端。统一用 RtData 包一个友好提示，细节进日志。
-
-### 批量改请求绕过前端校验：后端必须重新校验
-
-前端的表单校验（哪怕你用了 zod 写得很严）对攻击者**完全无效**——他可以用 Postman/curl 绕过你的页面直接打接口。
-
-```java
-// 后端用 Bean Validation 重新校验，和前端 zod 各管各的
-public record CreateTaskReq(
-    @NotBlank @Size(max = 2000) String prompt,    // 不信前端限了长度
-    @Min(1) @Max(4) int count                     // 一次最多生成 4 张
-) {}
-
-@PostMapping("/canvas/task")
-public RtData<String> create(@RequestBody @Valid CreateTaskReq req) {
-    // @Valid 触发校验，不合法直接被全局异常处理拦截，返回统一错误
-    return RtData.ok(taskService.submit(req));
-}
-```
-
-更关键的是**业务规则也要后端校验**：配额够不够、用户是不是 VIP、能不能用这个模型——这些前端可以提示，但**扣配额、判权限的最终决定权在后端**（呼应 32.3 的登录、第 12 章用分布式锁扣配额）。
-
-> 这就是本章的核心铁律，值得单独成行：**前端校验是为了体验（即时反馈、少跑一趟网络），不是为了安全；任何能影响数据和权限的校验，后端必须独立再做一遍。**
-
----
-
-## 32.5 一张表：漏洞与后端对策速查
-
-| 漏洞 | 一句话 | 后端核心对策 |
+| 比较 | 服务端 Session | 自包含 JWT 访问令牌 |
 | --- | --- | --- |
-| SQL 注入 | 输入被当成 SQL 执行 | 参数化查询 / ORM，绝不拼 SQL |
-| 存储型 XSS | 恶意脚本存库后被渲染 | 输出转义 + 存储白名单净化 |
-| CSRF | 借登录态发非预期请求 | SameSite Cookie / CSRF token；header 带 JWT 基本免疫 |
-| IDOR 越权 | 改 id 访问别人的数据 | uid 取自 token，按归属查询 |
-| 信息泄露 | 日志/响应带敏感字段 | DTO 出参脱敏、日志脱敏、生产不吐堆栈 |
-| 绕过前端校验 | 用 curl 直接打接口 | 后端 Bean Validation + 业务规则重校验 |
-| 弱密码存储 | 拖库即沦陷 | bcrypt/Argon2 加盐慢哈希 |
-| 越权伪造身份 | 篡改 JWT payload | 后端验签，密钥严格保管 |
+| 身份状态 | 服务端保存，按会话 ID 查询 | 可在本地验签读取声明，也可配在线状态检查 |
+| 注销 / 撤权 | 撤销会话后，后续查询即可拒绝 | 仅离线验签时一般仍有效到过期；立即撤销需要额外状态或在线检查 |
+| 多实例 | 需要会话共享或适当路由策略 | 多个资源服务可共享可信公钥验证，但密钥轮换、受众隔离仍要管理 |
+| 主要成本 | 会话存储与查找、Cookie 相关防护 | 生命周期、泄露处置、刷新、旧权限残留、密钥管理 |
+| 起步选择 | 单体浏览器应用通常优先考虑 | 接标准身份平台、多个资源服务、移动端等场景再评估 |
 
----
+JWT 不等于 `localStorage`。令牌可以由不同客户端以不同方式保存和发送：Web Storage 可被同源 JS 读取，XSS 会增加窃取风险；Cookie 可设置 `HttpOnly`，但浏览器自动携带凭据时要处理 CSRF；内存持有也不抵御正在页面中执行的恶意脚本。没有一种存储位置能代替整体威胁模型。
 
-## 32.6 实操：验证一个越权漏洞
+## 32.3 刷新与注销：明确撤销的是哪一层
 
-把上面 IDOR 的对策落到一次真实验证里，体会"为什么不能信前端"。
+先有会话寿命需求，再引入刷新令牌。简单 Session 登录不必为了“标准姿势”再造一套 access/refresh 双令牌。
 
-**目标**：确认 `/canvas/task/{taskId}` 修好后，A 用户拿不到 B 用户的任务。
+采用双令牌时，可以把 access token 设置为较短有效期，refresh token 用于受控端点换取新 access token；具体时长取决于风险与体验，不是固定的 15 分钟或 7 天。刷新端必须验证令牌的类型、客户端/会话绑定及有效状态，不能把任意访问令牌当刷新凭据。
 
-**命令**（A 用自己的 token 去查一个属于 B 的 taskId）：
+安全边界要写在设计中：
+
+1. **刷新轮换**：每次刷新发新 refresh token，使旧值失效。服务端可保存其安全摘要、会话族及使用记录；发现旧值被重放时撤销相关会话并要求重登。并发刷新需要客户端合并请求、服务端有明确的竞态处理规则。
+2. **注销**：删除浏览器凭据还不够。Session 方案要使服务端会话失效；双令牌方案要撤销 refresh 会话。**撤销 refresh 不会自动让已经签出的 access token 失效**。
+3. **立即阻断**：高风险场景可加令牌撤销表、用户会话版本或在线内省/账号状态检查；它们会重新引入状态查询。不能同时承诺“完全无状态”和“所有令牌即时撤销”。
+4. **密码重置 / 设备丢失**：提供撤销全部会话的能力，重置凭据要一次性、短寿命、不可枚举；不要把重置令牌写日志。
+5. **客户端重试**：只对约定的令牌过期原因刷新一次，失败后重新登录。不能对所有 `401` 无限刷新；重放写请求还需业务幂等，见 [API 设计](/back-end/frontend-backend-guide/34-api-design)。
+
+## 32.4 密码：哈希、加盐与验证不是手写密码学
+
+需求：“即使数据库副本泄露，也不能立即拿到所有人的原密码。”最小实现是采用成熟的**自适应密码哈希**组件，如经过正确配置的 Argon2id 或 bcrypt，按当前安全建议和机器能力评估计算成本。
+
+- 不明文保存，不使用可逆加密来代替密码哈希，不用裸 MD5/SHA-256 等快速摘要存密码。
+- 每份密码使用随机盐。盐不是秘密，通常与算法标识、成本参数、哈希一起编码保存；相同密码也应产生不同结果。盐防预计算与相同密码关联，不会让弱密码变强。
+- 用 `PasswordEncoder.matches(raw, encoded)` 验证，不要重新 `encode` 后比较字符串，也不要自己管理“拼盐 + SHA”的协议。
+- 前端哈希不能替代 HTTPS 或后端密码哈希；若服务器把前端哈希当凭据接受，这串值本身就是可重放的密码等价物。
+
+下面是在已有 Spring Security 配置中声明编码器的示例，**不是完整注册/登录接口**：
+
+```java
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+@Bean
+PasswordEncoder passwordEncoder() {
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+}
+
+// 注册：String stored = passwordEncoder.encode(rawPassword);
+// 登录：boolean valid = passwordEncoder.matches(rawPassword, stored);
+// 算法前缀保存在结果中，便于未来迁移；部署前评估默认算法和成本。
+```
+
+除此以外，还需要登录尝试限速、弱密码策略、统一的“账号或密码错误”、审计与异常检测。统一文案不自动消除时序侧信道：不存在用户的分支如果完全跳过昂贵的哈希验证，仍可能泄露差异；使用成熟认证实现并测试，而不是在示例里注释“避免枚举”就算完成。锁号也要防止攻击者恶意锁住别人的账号。
+
+## 32.5 XSS、CSRF、CORS：三件不同的事
+
+| 概念 | 威胁 / 职责 | 在任务系统中做什么 | 不能误以为 |
+| --- | --- | --- | --- |
+| XSS | 不可信内容在受害者页面上下文执行 | 标题按纯文本渲染；按 HTML、属性、URL 等输出上下文编码；富文本用成熟白名单净化器；配 CSP 等纵深防御 | “后端删了 script 标签”或“Cookie 有 HttpOnly”就不会受害 |
+| CSRF | 浏览器自动带上凭据，被诱导执行非预期操作 | Cookie 登录的写接口校验框架 CSRF token，结合 SameSite、Origin 检查；GET 不做修改 | token 只要叫 JWT 就没有 CSRF |
+| CORS | 浏览器控制跨源脚本是否能读取响应等 | 仅允许确有需求的来源、方法、头；凭据请求使用明确来源 | CORS 是身份认证、可阻止 curl，或能代替 CSRF |
+
+**CSRF 与令牌的关系**：若访问令牌只从客户端代码放进 `Authorization` 头、没有浏览器自动附带的备用凭据，传统 CSRF 风险较低；但 Cookie 中的 JWT、refresh Cookie 和其他自动携带认证信息的接口仍要独立评估 CSRF。XSS 一旦发生，可调用页面权限内的接口，因此“用 header 所以绝对安全”仍是错的。
+
+**CORS 的边界**：同源部署 `task-api` 的页面与接口时可能不需要配置跨源放行。开发服务器不同端口需要时，仅放行本地开发来源。预检失败不代表请求一定未到服务端，有些简单跨源请求会发送，只是响应不让 JS 读取；后端必须自己认证、授权。
+
+**内容如何存储**：纯文本标题可以按原始文本保存，在每种输出端按其上下文正确编码，避免全局预转义造成双重编码；允许富文本才引入专门净化策略。导出、邮件和管理后台也要使用相应的安全输出规则。
+
+## 32.6 不只登录：接口及运行环境的底线
+
+| 边界 | 最小防护 | 典型失败 |
+| --- | --- | --- |
+| 输入与业务状态 | Bean Validation 验格式；Service 验业务权限、状态、配额 | 只校验前端表单；允许请求体直接覆盖 owner、role 等字段 |
+| 数据库 | 值使用参数绑定；动态排序/列名走白名单 | 以为用了 ORM 就可以随便拼原生 SQL |
+| 文件与外部 URL | 限制大小/类型/路径；下载鉴权；服务端抓取 URL 要防 SSRF | 客户端传路径就写磁盘；任意 URL 可访问内网元数据服务 |
+| 传输 | 生产 HTTPS；代理终止 TLS 后按信任模型保护后续链路 | 登录前先把密码发到 HTTP，再指望重定向保护已发出的内容；把“内网”视为天然可信 |
+| 密钥 | 由受控运行环境/密钥系统注入，最小权限、轮换、审计 | 提交 Git、打进前端包、完整打印到日志 |
+| 返回与日志 | 响应 DTO 排除密码哈希、令牌；结构化日志做脱敏与注入防护 | 记录整个登录请求或完整 Authorization 头 |
+| 依赖与权限 | 维护依赖版本，应用账号不持有无关管理权限 | 业务数据库账号拥有全部 DDL；应用容器默认高权限 |
+
+Kubernetes Secret 中的 Base64 **只是编码，不是加密**；还要依赖 RBAC、静态存储加密及密钥管理等机制。环境变量也不是保险箱，进程诊断、日志和部署权限都可能暴露它。误提交密钥后先撤销、轮换，再清理历史，而不是只删当前文件。
+
+更多附件和回调的边界见 [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)，运行配置见 [配置与环境](/back-end/frontend-backend-guide/25-config-and-env)。
+
+## 32.7 MFA、OAuth2、OIDC、SSO：听懂接入方案即可
+
+| 词 | 解决的现实问题 | 关键边界 |
+| --- | --- | --- |
+| MFA 多因素认证 | 密码泄露后，再要求独立因素证明身份 | 密码加另一个密码不是独立因素；短信有劫持风险，可评估 TOTP、通行密钥等方案；还要安全的恢复流程 |
+| OAuth 2.0 | 应用取得访问某个资源的有限授权，不收集用户在第三方的密码 | 它首先是授权框架，不单独定义“用户已登录我是谁”；使用成熟库实现授权码 + PKCE，校验回调与 state 等 |
+| OIDC | 在 OAuth 2.0 上增加身份层，标准化登录和身份声明 | 验证 ID Token 的签名、iss、aud、有效期与按流程要求的 nonce；ID Token 不直接当任意业务 API 的 access token |
+| SSO 单点登录 | 多个应用复用身份提供方登录会话，减少反复登录 | 不是所有应用共享一份 localStorage；应用会话、IdP 会话、各资源令牌的注销范围要分别设计 |
+
+“用 GitHub 登录”之类的接入要遵循提供方的具体协议：有些基于 OAuth 授权后再调用户 API，有些提供 OIDC。不要拿一个解码成功的字符串或前端传来的 email 就绑定已有账号；账号绑定本身也要验证归属并防接管。初学的单体登录不需要自建身份提供方，需要时优先接成熟平台。
+
+## 32.8 动手练习：证明安全边界真的有效
+
+前提：已完成 [CRUD 入门](/back-end/frontend-backend-guide/07-build-a-crud-api)，并通过 Spring Security 为本地练习接入 Session；创建普通用户 A、B，各自有任务。练习账号仅用于本地，不把真实密码放在命令行历史中。下面的 `a.cookies` 由本地登录流程获取；写操作的 CSRF token 按实际框架配置获取，不关闭 CSRF 来“让测试通过”。
 
 ```bash
-# A 的 token，去查 B 的任务 ID
-curl -s -H "Authorization: Bearer <A的access token>" \
-  http://localhost:8080/canvas/task/task-belongs-to-B \
-  | jq .
+# 1. 无会话读受保护资源
+curl -i http://localhost:8080/api/tasks
+
+# 2. A 访问自己的任务（示例 ID 为 1）
+curl -i -b a.cookies http://localhost:8080/api/tasks/1
+
+# 3. A 尝试读取 B 的任务（示例 ID 为 2）
+curl -i -b a.cookies http://localhost:8080/api/tasks/2
+
+# 4. 没有会话，只伪造身份头
+curl -i -H 'X-User-Id: 2' http://localhost:8080/api/tasks/2
 ```
 
-**修复前的预期输出**（错误，泄露了 B 的数据）：
+**预期结果**：对 JSON API，未认证返回 `401` 而非 HTML 登录页；自己的任务 `200`；别人的任务按本章契约返回 `404`；伪造身份头仍是 `401`。还应测试：A 以合法 CSRF token 修改 B 的任务仍失败，数据库 B 的记录没有变化；缺少 CSRF token 的 Cookie 写请求被拒绝；注销后旧会话不能再访问。
 
-```json
-{ "code": 0, "msg": "ok", "data": { "taskId": "task-belongs-to-B", "uid": 20002, "prompt": "B 的私密 prompt" } }
-```
+**延伸验证**：对同一密码执行两次 `encode`，结果不同但 `matches` 都为真；把看似 HTML 的任务标题当文本展示，不能执行脚本。若采用 JWT，补测错误受众、过期、错误签名，以及注销后旧 access token 在你选定策略下的真实表现，不宣称未实现的即时失效。
 
-**修复后的预期输出**（正确）：
+## 自测与答案
 
-```json
-{ "code": 40400, "msg": "任务不存在", "data": null }
-```
+1. A 已登录，改 URL 就能读到 B 的任务，是认证失败吗？
 
-**怎么读这段输出**：修复前 `data` 里出现了 `uid: 20002`（B 的 uid），说明 A 越权读到了 B 的数据——这是高危漏洞。修复后返回"任务不存在"且不区分"真不存在"还是"不是你的"，A 既拿不到数据，也猜不出这个 id 是否存在。**结论**：归属校验必须在后端按"token 里的 uid + 资源 id"联合查询，前端传什么 uid 都不作数。
+   **答案**：通常是授权/数据归属校验缺失，典型 IDOR；在读写查询中落实可信身份的数据范围，并测试所有入口。
+2. 使用 JWT 并放到 HttpOnly Cookie，是否就不需要 CSRF 防护？
 
----
+   **答案**：不是。Cookie 会被浏览器自动携带，是否存在 CSRF 取决于凭据发送方式与请求防护，不取决于令牌格式。
+3. 删除 refresh token 后，旧 access token 为什么还能调用接口？
 
-## 32.7 传输与密钥：HTTPS、Secret 管理、最小权限
+   **答案**：仅离线验签的资源服务不知道 refresh 被撤销；要接受短期残余窗口，或增加撤销/版本/在线状态检查。
+4. 数据库里每个用户的盐都公开，是密码泄露吗？
 
-### 全站 HTTPS
+   **答案**：盐本就不必保密，密码仍受专用哈希和成本参数保护，但弱密码仍可被离线猜测，应评估算法参数和额外防护。
+5. OAuth2、OIDC、SSO 是三个同义词吗？
 
-明文 HTTP 下，token、密码在链路上任何一跳都能被截获（中间人攻击）。生产**全站强制 HTTPS**，HTTP 一律 301 跳转到 HTTPS。本项目里 TLS 通常在 svc-gateway 或更前面的负载均衡/Ingress 终结，内部服务间走内网（呼应 [后端网络](/back-end/frontend-backend-guide/22-networking-for-backend)）。
+   **答案**：不是。分别强调资源授权框架、身份协议层、跨应用复用登录的体验/架构目标。
 
-**前端类比**：浏览器地址栏那把锁、混合内容（mixed content）警告，就是 HTTPS 在前端的体现。后端要保证证书有效、协议版本不过时、敏感 Cookie 带 `Secure`。
+## 相关教程
 
-### 密钥/Secret 绝不进代码库
-
-JWT 密钥、数据库密码、OSS AccessKey、第三方 API key——**一个都不能硬编码进代码、不能提交到 Git**。一旦进了 Git 历史，即使后来删掉，历史里依然能翻出来，等于永久泄露。
-
-```yaml
-# ❌ 绝不这样写死在 application.yml 里提交
-jwt:
-  secret: my-super-secret-key-123
-
-# ✅ 用环境变量/外部配置注入，代码库里只留占位
-jwt:
-  secret: ${JWT_SECRET}     # 值由 K8s Secret / 配置中心 / 环境变量提供
-```
-
-Secret 的来源和注入方式（环境变量、K8s Secret、配置中心）在 [配置与环境管理](/back-end/frontend-backend-guide/25-config-and-env) 里详谈。本章只强调一句：**代码库里只能有占位符，真实值由运行环境提供**。
-
-**前端类比**：你知道前端的 `.env` 里 `VITE_` 开头的变量会被打进 bundle、所有人可见，所以从不把真密钥放前端——后端是同样的纪律，而且更严格：连配置文件本身都不进库。
-
-### 最小权限原则
-
-每个组件只给它干活所必需的最小权限：
-
-- 数据库账号：svc-user 只给 user 库的读写，不给 DROP、不给别的库。
-- OSS：svc-oss 的 AccessKey 只允许操作指定 bucket，不给删全站的权限。
-- 容器：不用 root 跑应用进程（呼应 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice)）。
-
-**前端类比**：像申请浏览器权限——只在需要时申请定位/摄像头，而不是一上来要全部权限。万一某个服务被攻破，最小权限能把爆炸半径限制在最小范围。
-
----
-
-## 小结
-
-- **认证 vs 授权**：认证管"你是谁"（失败 401），授权管"你能干啥"（失败 403）；只做认证不做授权是最常见的安全洞。
-- **JWT** 是三段式无状态令牌，payload 只是 Base64 编码（公开可读），敏感信息绝不能放；服务端靠验签防伪造，配 access + refresh token 解决过期与吊销。
-- **密码**只存 bcrypt/Argon2 加盐慢哈希，绝不明文、绝不可逆、绝不裸 MD5。
-- **常见漏洞**逐个有定式：SQL 注入用参数化、XSS 做转义与净化、IDOR 按 token 里的 uid 校验归属、敏感信息出参和日志都脱敏。
-- **贯穿铁律**：前端校验只为体验，后端必须重新校验一切影响数据与权限的输入；HTTPS 全站、密钥不进库、最小权限。
-
-### 自测
-
-1. 同一个用户登录后，调用"删除画布"接口返回了 403，调用"获取我的资料"接口返回了 401。分别说明这两个状态码背后最可能的原因，它们各属于认证还是授权问题？
-2. 同事说"我们 JWT 的 payload 里放了用户手机号，反正前端要用，问题不大"。请指出这为什么是安全隐患，并给出正确做法。
-3. 一个查询接口 `GET /canvas/task/{taskId}` 只校验了登录态。写出它存在的漏洞名称，以及把 taskId 改成别人的会发生什么、应该怎么改。
-
-### 下一章
-
-下一章进入异步世界，看消息队列在保证"任务不丢、不重复"上做了哪些功夫：[消息队列可靠性](/back-end/frontend-backend-guide/33-mq-reliability)。
+- [CRUD 与参数校验](/back-end/frontend-backend-guide/07-build-a-crud-api)：先有受保护的资源。
+- [SQL 与索引](/back-end/frontend-backend-guide/10-sql-and-indexes)：参数绑定、归属查询与索引。
+- [后端网络](/back-end/frontend-backend-guide/22-networking-for-backend)：Cookie、TLS、跨源与代理。
+- [消息任务可靠性](/back-end/frontend-backend-guide/33-mq-reliability)：刷新重试之外，业务副作用怎样防重复。
+- [测试](/back-end/frontend-backend-guide/35-testing)：把越权、注销、CSRF 做成回归测试。
+- [后端功能地图](/back-end/frontend-backend-guide/39-backend-feature-map) / [场景词典](/back-end/frontend-backend-guide/90-glossary)：需要时再展开权限、租户、Webhook 等功能。

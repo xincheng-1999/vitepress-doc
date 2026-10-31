@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS tasks (
+    id VARCHAR(36) PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    status VARCHAR(16) NOT NULL CHECK (status IN ('TODO', 'DOING', 'DONE')),
+    created_at TIMESTAMP(6) NOT NULL
+);

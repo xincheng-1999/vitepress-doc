@@ -17,6 +17,9 @@ def normalize_href(href: str) -> str:
     if " " in href:
         href = href.split(" ", 1)[0].strip()
     parts = urlsplit(href)
+    # Do not discard an external URL's host and mistake its path for a site route.
+    if parts.scheme or parts.netloc:
+        return ""
     return parts.path
 
 
@@ -33,10 +36,16 @@ def route_candidates(route: str, *, content_root: Path) -> list[Path]:
     r = route.split("#", 1)[0].split("?", 1)[0]
     r = r.lstrip("/")
     if not r:
-        return []
+        return [content_root / "index.md"]
     if r.endswith("/"):
         r = r[:-1]
-    return [
+    # Links may include .md, and downloads/static assets live in public/.
+    direct = [content_root / "public" / r]
+    if r.endswith(".md"):
+        r = r[:-3]
+    elif r.endswith(".html"):
+        r = r[:-5]
+    return direct + [
         content_root / f"{r}.md",
         content_root / r / "index.md",
     ]

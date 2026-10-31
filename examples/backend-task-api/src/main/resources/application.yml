@@ -1,0 +1,14 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+spring:
+  datasource:
+    url: jdbc:h2:mem:tasks;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: embedded
+logging:
+  pattern:
+    level: "%5p [requestId=%X{requestId}]"

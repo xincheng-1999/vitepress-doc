@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="610" viewBox="0 0 960 610" role="img" aria-labelledby="title desc">
+  <title id="title">task-api 的认证、授权和数据归属检查</title>
+  <desc id="desc">请求先被视为不可信输入，再由安全框架验证会话或令牌建立身份，之后检查动作权限，最后在读写数据库时限制数据归属。请求体和客户端身份头不能直接成为可信身份。下方分别列出认证失败、动作禁止和资源越界的处理。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+    <style>text{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.subtitle{font-size:18px;fill:#334155}.head{font-size:22px;font-weight:700}.body{font-size:17px}.small{font-size:16px;fill:#334155}.arrow{fill:none;stroke:#334155;stroke-width:2.5}</style>
+  </defs>
+  <rect width="960" height="610" fill="#f8fafc"/>
+  <text x="40" y="47" class="title">登录不等于能操作任意任务：三道服务端边界</text>
+  <text x="40" y="82" class="subtitle">Session / JWT 的选择不同，认证、授权与归属检查都不能省略</text>
+  <rect x="40" y="151" width="202" height="180" rx="12" fill="#fff7ed" stroke="#b45309" stroke-width="2"/>
+  <text x="58" y="188" class="head">0 不可信请求</text>
+  <text x="58" y="225" class="body">URL、JSON、Cookie</text>
+  <text x="58" y="254" class="body">客户端 X-User-Id</text>
+  <text x="58" y="298" class="small">输入不是身份事实</text>
+  <path d="M243 241 H264" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="268" y="151" width="202" height="180" rx="12" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="286" y="188" class="head">1 认证</text>
+  <text x="286" y="225" class="body">验证会话 / 令牌</text>
+  <text x="286" y="254" class="body">建立可信 principal</text>
+  <text x="286" y="298" class="small">是谁？凭据有效吗？</text>
+  <path d="M471 241 H492" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="496" y="151" width="202" height="180" rx="12" fill="#f5f3ff" stroke="#6d28d9" stroke-width="2"/>
+  <text x="514" y="188" class="head">2 动作授权</text>
+  <text x="514" y="225" class="body">编辑 / 分配 / 导出</text>
+  <text x="514" y="254" class="body">服务端校验权限</text>
+  <text x="514" y="298" class="small">能做这个动作吗？</text>
+  <path d="M699 241 H720" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="724" y="151" width="196" height="180" rx="12" fill="#ecfdf5" stroke="#047857" stroke-width="2"/>
+  <text x="742" y="188" class="head">3 数据归属</text>
+  <text x="742" y="225" class="body">任务 ID + 用户范围</text>
+  <text x="742" y="254" class="body">必要时再限租户</text>
+  <text x="742" y="298" class="small">能操作这条数据吗？</text>
+  <rect x="40" y="380" width="880" height="154" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+  <text x="60" y="416" class="head">认证失败</text>
+  <text x="60" y="451" class="body">401：未登录 / 凭据无效</text>
+  <text x="60" y="485" class="small">不从 uid 参数“补身份”</text>
+  <line x1="326" y1="400" x2="326" y2="510" stroke="#cbd5e1"/>
+  <text x="348" y="416" class="head">动作被禁止</text>
+  <text x="348" y="451" class="body">403：身份已知但不允许</text>
+  <text x="348" y="485" class="small">隐藏按钮不能代替后端判断</text>
+  <line x1="620" y1="400" x2="620" y2="510" stroke="#cbd5e1"/>
+  <text x="644" y="416" class="head">资源超出范围</text>
+  <text x="644" y="451" class="body">可按契约返回统一 404</text>
+  <text x="644" y="485" class="small">读 / 改 / 删都要约束范围</text>
+  <text x="40" y="577" class="subtitle">可信身份来自框架验证结果；权限变化、注销和旧令牌的生效时限必须另行定义。</text>
+</svg>

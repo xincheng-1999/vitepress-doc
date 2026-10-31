@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="660" viewBox="0 0 960 660" role="img" aria-labelledby="title desc">
+  <title id="title">持久任务、outbox 和消费者幂等的可靠性边界</title>
+  <desc id="desc">先在本地数据库事务中同时保存 job 与 outbox，发布器把事件发给 Broker，Broker 将消息投递给消费者。消费者在本地事务中一起提交去重记录和业务效果，提交后才能确认。发送确认丢失和消费确认丢失都可能触发重复，因此 outbox 解决发送意图持久化，不消除重复，外部短信和支付仍需独立幂等与对账。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+    <style>text{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.subtitle{font-size:18px;fill:#334155}.head{font-size:22px;font-weight:700}.body{font-size:17px}.small{font-size:16px;fill:#334155}.arrow{fill:none;stroke:#334155;stroke-width:2.5}.dash{fill:none;stroke:#6d28d9;stroke-width:2.2;stroke-dasharray:7 5}</style>
+  </defs>
+  <rect width="960" height="660" fill="#f8fafc"/>
+  <text x="40" y="47" class="title">可靠异步：保存意图，允许重投，约束重复效果</text>
+  <text x="40" y="82" class="subtitle">先用持久 job 解决重启恢复；确有跨进程投递需求，再加 outbox + MQ</text>
+  <text x="40" y="133" class="small">① 本地事务提交后才能宣称“已受理”</text>
+  <rect x="40" y="150" width="390" height="108" rx="12" fill="#ecfdf5" stroke="#047857" stroke-width="2"/>
+  <text x="62" y="187" class="head">MySQL：同一个本地事务</text>
+  <text x="62" y="225" class="body">job(PENDING) + outbox(PENDING)</text>
+  <path d="M431 204 H506" class="arrow" marker-end="url(#arrow)"/>
+  <text x="448" y="185" class="small">认领</text>
+  <rect x="510" y="150" width="180" height="108" rx="12" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="600" y="187" text-anchor="middle" class="head">发布器</text>
+  <text x="600" y="225" text-anchor="middle" class="body">确认后标记 SENT</text>
+  <path d="M691 204 H756" class="arrow" marker-end="url(#arrow)"/>
+  <text x="706" y="185" class="small">发送</text>
+  <rect x="760" y="150" width="160" height="108" rx="12" fill="#fff7ed" stroke="#b45309" stroke-width="2"/>
+  <text x="840" y="187" text-anchor="middle" class="head">Broker</text>
+  <text x="840" y="225" text-anchor="middle" class="body">存储 / 投递</text>
+  <path d="M840 259 V409 H694" class="arrow" marker-end="url(#arrow)"/>
+  <text x="762" y="321" class="small">② 可能重复投递</text>
+  <rect x="510" y="355" width="180" height="108" rx="12" fill="#f5f3ff" stroke="#6d28d9" stroke-width="2"/>
+  <text x="600" y="392" text-anchor="middle" class="head">消费者</text>
+  <text x="600" y="430" text-anchor="middle" class="body">不提前确认</text>
+  <path d="M509 409 H434" class="arrow" marker-end="url(#arrow)"/>
+  <text x="448" y="390" class="small">执行</text>
+  <rect x="40" y="355" width="390" height="108" rx="12" fill="#ecfdf5" stroke="#047857" stroke-width="2"/>
+  <text x="62" y="392" class="head">MySQL：同一个本地事务</text>
+  <text x="62" y="430" class="body">去重唯一记录 + 本地业务效果</text>
+  <path d="M235 464 V492 H870 V262" class="dash" marker-end="url(#arrow)"/>
+  <text x="346" y="521" class="small">③ 本地效果提交后再 ack；确认丢失时靠幂等承受重投</text>
+  <rect x="40" y="552" width="880" height="72" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+  <text x="60" y="582" class="body">Outbox 不消除重复；“已发送”不等于“任务完成”。</text>
+  <text x="60" y="608" class="small">边界：短信、邮件、支付等外部效果不在本地事务里，需要提供方幂等协议或查询对账。</text>
+</svg>

@@ -1,20 +1,29 @@
 import argparse
 import json
-import re
+import subprocess
 from pathlib import Path
 
 
-LINK_FIELD = re.compile(r"\blink\s*:\s*['\"](?P<link>[^'\"]+)['\"]")
-
-
 def extract_routes_from_js(path: Path) -> list[str]:
-    text = path.read_text(encoding="utf-8")
-    routes = []
-    for m in LINK_FIELD.finditer(text):
-        link = m.group("link")
-        if link.startswith("/"):
-            routes.append(link)
-    return routes
+    # Evaluate the repository's pure JS config so imports and page() helpers are
+    # checked too. Regex alone silently misses generated sidebar entries.
+    script = """
+      import { pathToFileURL } from 'node:url';
+      const { default: config } = await import(pathToFileURL(process.argv[1]).href);
+      const routes = [];
+      function visit(value) {
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.link === 'string' && value.link.startsWith('/')) routes.push(value.link);
+        for (const item of Object.values(value)) visit(item);
+      }
+      visit(config);
+      console.log(JSON.stringify(routes));
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script, str(path.resolve())],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(result.stdout)
 
 
 def route_candidates(route: str, *, content_root: Path) -> list[Path]:

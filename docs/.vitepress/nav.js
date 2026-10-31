@@ -17,11 +17,12 @@ export default [
   {
     text: "后端",
     items: [
-      { text: "Spring 全栈路线", link: "/back-end/spring-fullstack-roadmap.md" },
-      { text: "Java", link: "/back-end/java/01-environment.md" },
-      { text: "后端学习指南", link: "/back-end/frontend-backend-guide/index.md" },
-      { text: "Python", link: "/python-study/python-basic.md" },
-      { text: "数据库", link: "/back-end/database/index.md" },
+      { text: "从这里开始：前端转后端", link: "/back-end/frontend-backend-guide/index.md" },
+      { text: "听懂同事：后端功能地图", link: "/back-end/frontend-backend-guide/39-backend-feature-map.md" },
+      { text: "后端术语词典", link: "/back-end/frontend-backend-guide/90-glossary.md" },
+      { text: "Java 专题（按需查）", link: "/back-end/java/01-environment.md" },
+      { text: "数据库专题（按需查）", link: "/back-end/database/index.md" },
+      { text: "Python（独立方向）", link: "/python-study/python-basic.md" },
     ],
   },
   { text: 'Rust', link: '/rust-study/rust-basic.md' },

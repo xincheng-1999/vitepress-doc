@@ -1,173 +1,259 @@
-# 术语对照表
-
-> 前端转后端最大的障碍之一就是术语：同一个概念，前端叫一个名字，后端换了套词汇，听着像天书，其实你早就会了。
-> 这张表帮你用已有的前端知识（React/Vue/Node/axios/Promise/zod）快速"翻译"后端概念。
-> 建议当成字典用——读到本课程其它章节遇到生词，回来查一下。
-
-本表所有举例尽量贴近本课程贯穿的 **AI 生图微服务**（`svc-gateway` / `svc-auth` / `svc-user` / `svc-ai` / `svc-canvas` / `svc-oss`，共享组件 `cpt-common` / `cpt-api` 等，统一响应类型 `RtData`）。
-
+---
+prev: false
+next: false
 ---
 
-## 核心架构术语
+# 90. 场景词典：听懂术语，更要知道它解决什么
 
-后端代码的分层（Controller → Service → Repository）和你写 Next.js 的 `route handler → service hook → api 层`其实是同一套思路，只是名字更"正式"。
+## 学习目标与查阅方式
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **Controller** | API Route Handler / `router.get()` / Next.js `app/api/.../route.ts` | 接收 HTTP 请求的入口，只负责参数校验和调 Service，不写业务逻辑。例：`svc-auth` 的 `LoginController` 收登录请求 |
-| **Service** | 业务逻辑 Hook / Composable | 核心业务逻辑所在，不直接碰 HTTP。例：`svc-user` 的 `QuotaService` 负责扣配额 |
-| **Repository / Mapper** | Data Access Layer / `api/*.ts` | 操作数据库的封装层，提供 CRUD 方法，调用方不用关心底层是 MongoDB 还是 MySQL |
-| **Entity / Document** | TypeScript `interface` / `type` | 数据模型定义，描述数据库里一条记录的结构。MongoDB 里叫 Document，MySQL 里对应一个 Entity |
-| **DTO**（Data Transfer Object） | 请求参数的 `type` + zod schema | 专门接收请求参数的类，常带校验注解（`@NotBlank` 类似 zod 的 `.min(1)`） |
-| **VO**（View Object） | 响应数据的 `type` | 专门返回给前端的数据类，常隐藏掉密码、内部字段等敏感信息 |
-| **RtData** | axios 响应里统一的 `{ code, data, msg }` 包装 | 本项目的统一响应类型。`RtData.ok(data)` 成功、`RtData.fail(msg)` 失败，前端只看 `code` 判断成败 |
-| **POJO / Bean** | 普通 JS 对象（plain object） | "Plain Old Java Object"，就是一个只有字段和 get/set 的普通对象 |
+- 遇到生词能用一句定义说明它是什么，再说出它解决的现实问题。
+- 能识别“听起来像”却不等价的概念，不把前端比喻当成实现保证。
+- 沿每条的“相关教程”回到场景学习，而不是背完词典才开始写代码。
 
-详见 [三层架构与项目结构](/back-end/frontend-backend-guide/04-three-layer-and-structure)。
+共同场景是 **Java 17 + Spring Boot 3.x 的单体 `task-api`**，本地 `8080`，核心入口 `/api/tasks`。第一课用 H2 起步，持久化主线用 MySQL；Redis、MQ、ES、Kubernetes、微服务都是按需求引入的选修能力，不是启动清单。
 
-## Spring 框架术语
+每个条目都回答四个问题：**定义 / 解决什么问题 / 常见误区 / 去哪里学**。有些词在不同产品中语义不同，表中给出本教程常用含义；精确保证仍以所选实现和配置为准。
 
-Spring 干的事，本质上就是一个超大号的"依赖注入容器 + 装饰器系统"。如果你用过 NestJS，会觉得似曾相识——NestJS 正是借鉴了 Spring。
+## A. 接到一个需求：代码放哪、接口怎么表达
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **IoC 容器** | NestJS 的 DI 容器 / Vue 的 `provide/inject` 体系 | "控制反转"——对象不自己 `new` 依赖，交给框架统一创建和管理 |
-| **Bean** | 单例实例 / 模块级单例 | Spring 容器管理的对象，默认全局共享一个实例 |
-| **@Autowired / 构造器注入** | `inject()` / `useContext()` | 依赖注入——框架帮你把依赖塞进来，不用手动 `new` |
-| **@Component / @Service / @Repository** | `@Injectable()`（NestJS） | 标记一个类交给 Spring 托管，分别表示通用组件 / 业务层 / 数据层 |
-| **AOP / Aspect** | 高阶函数 / 装饰器 / axios 拦截器 | "面向切面"——给一批方法统一加日志、鉴权、事务，不污染业务代码 |
-| **Filter** | Express middleware | 最外层拦截器，在请求到达 Controller 之前执行（如 `svc-gateway` 的鉴权 Filter） |
-| **Interceptor** | axios 请求/响应拦截器 | Spring MVC 层的钩子，在 Controller 前后执行 |
-| **@Transactional** | 手写 `try/commit/rollback` 的封装 | 加在方法上，方法内多个 DB 操作要么全成功要么全回滚 |
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| 单体 Monolith | 主要业务模块一起构建、部署的应用形态 | 小团队先在一个进程中交付完整功能 | 单体不等于所有逻辑写在一个类，也能分模块 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| 微服务 Microservices | 按业务边界独立运行、部署并通过网络协作的服务 | 有证据的独立发布、扩缩与团队自治 | 拆几个 Controller 不叫微服务，网络故障和一致性成本不会消失 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| Controller | 将 HTTP 输入输出适配到应用操作的入口 | 接收参数、调用业务、组织响应 | 不是所有业务都该放在 Controller，也不是前端路由守卫 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| Service（业务层） | 封装业务用例与规则的组件 | 决定谁能改任务、如何校验状态和划事务 | 不等于 Kubernetes Service，也不自动是独立服务 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| Repository / Mapper | 数据访问抽象或映射组件 | 集中处理任务查询、更新与持久化映射 | 不是浏览器 api 请求文件；换数据库也不保证只改一行 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| Entity | 与持久化模型有关的实体对象 | 表达任务的数据及映射规则 | 不等于 TypeScript interface；也不应无条件直接作为接口响应 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| DTO | 面向数据传输边界的数据结构 | 明确创建任务可输入哪些字段 | 有 DTO 不等于自动校验业务权限，更不能任意绑定 owner/role | [API](/back-end/frontend-backend-guide/34-api-design) |
+| VO / 响应模型 | 本教程中指面向展示的响应结构 | 隐藏内部字段，保持接口契约稳定 | 有些领域设计语境 VO 指 Value Object，需先确认上下文 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| POJO | 不要求继承特定框架类型的普通 Java 对象 | 让数据与业务对象尽量少依赖框架 | POJO 不一定只有 getter/setter，也不天然是 Spring Bean | [Java](/back-end/frontend-backend-guide/05-java-crash-course) |
+| REST | 资源、统一接口等约束构成的架构风格 | 用清晰资源与 HTTP 语义建立接口 | URL 没有动词不代表已经满足所有 REST 约束 | [API](/back-end/frontend-backend-guide/34-api-design) |
+| CRUD | 创建、读取、更新、删除四类基本数据操作 | 最小闭环地维护任务资源 | CRUD 跑通不等于权限、事务、并发都正确 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| 分页 Pagination | 每次只返回数据集合的一部分 | 控制列表响应大小与查询成本 | 深 offset 可能慢，数据变化也可能让翻页重复/遗漏 | [API](/back-end/frontend-backend-guide/34-api-design) |
+| 幂等键 Idempotency Key | 标识一次逻辑操作的稳定客户端/业务键 | 网络重试时返回原结果，避免重复创建 | 相同键用于不同请求内容不能静默复用；需要唯一约束与作用域 | [API](/back-end/frontend-backend-guide/34-api-design) |
 
-详见 [Spring 的 IoC 与 DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) 和 [Spring IoC/DI 实战](/back-end/java/07a-spring-ioc-di)。
+## B. Spring 为什么能替我创建对象
 
-## 基础设施术语
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| IoC | 对象创建、装配等控制权由容器管理的思想 | 避免业务对象自行组织全部依赖 | 不是某个注解的别名，也不是“禁止所有 new” | [IoC/DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) |
+| DI 依赖注入 | 将对象所需依赖从外部传入 | 替换实现、明确依赖、便于测试 | 不等于 React 状态上下文；Java 构造器注入有自己的生命周期 | [IoC/DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) |
+| Spring Bean | 由 Spring 容器创建或注册、管理生命周期的对象 | 统一装配 Service、数据库客户端等组件 | Bean 与 POJO 不等同；默认 singleton 是每容器每定义一个，不代表线程安全 | [IoC/DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) |
+| Bean Scope | Bean 实例的创建与复用范围 | 区分 singleton、prototype、request 等生命周期 | 默认单例不表示所有作用域都只有一个实例 | [IoC/DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) |
+| 自动配置 Auto-configuration | Spring Boot 按依赖、条件和配置建立默认组件 | 减少手工配置通用基础设施 | 不是无条件魔法，条件不满足就不会生效 | [Spring](/back-end/frontend-backend-guide/06-spring-boot-ioc-di) |
+| AOP | 通过切面/代理等方式施加横切行为 | 统一事务、审计等跨多个方法的逻辑 | 不等同 axios 拦截器；代理调用边界影响是否生效 | [注解](/back-end/frontend-backend-guide/08-annotations-cheatsheet) |
+| Filter | Servlet 请求/响应链中的过滤组件 | 在 MVC 处理前后做通用协议处理 | 不应拿客户端 uid 头直接建立可信身份 | [请求链路](/back-end/frontend-backend-guide/03-request-lifecycle) |
+| Interceptor | Spring MVC handler 处理前后的拦截钩子 | 处理 MVC 层共性逻辑 | 与 Servlet Filter、客户端拦截器不是同一层 | [请求链路](/back-end/frontend-backend-guide/03-request-lifecycle) |
+| Bean Validation | 用约束和验证器检查输入形状与值域 | 校验标题非空、长度、数字范围 | @Valid 不证明用户有权改这条数据 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| @Transactional | 通过 Spring 事务机制声明事务边界 | 使同一事务资源中的操作按规则提交或回滚 | 自调用、异常规则、线程切换会影响效果；不能自动覆盖远程 API | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **application.yml** | `.env` / `config.ts` | 配置文件，存端口、数据库地址、Redis 地址等。多环境用 `application-dev.yml` / `application-prod.yml` |
-| **Maven（pom.xml）** | npm / pnpm（`package.json`） | 依赖管理工具，声明项目依赖的第三方库；`mvn package` 类似 `pnpm build` |
-| **Feign Client** | 封装好的 axios 实例 | 声明式 HTTP 客户端，调远程服务像调本地方法。本项目的 Feign 客户端都放在 `cpt-api` |
-| **RocketMQ** | `EventEmitter` / `postMessage` | 消息队列，发完即走、异步解耦。例：生图任务完成后发消息通知 `svc-user` 扣费 |
-| **Redis** | `sessionStorage` / 内存 `Map` | 高速缓存，本项目用于缓存、限流、分布式锁 |
-| **JWT** | `localStorage` 里的 token | JSON Web Token，服务器颁发的身份凭证，前端每次请求带在 `Authorization` 头里 |
-| **OSS** | CDN / 云存储 | 对象存储，存生图结果等大文件，返回一个 URL 给前端 |
-| **Nginx / 网关** | dev server 的 proxy 配置 | 反向代理，统一入口、转发请求 |
-| **K8s ConfigMap** | CI/CD 注入的环境变量 | 容器运行时注入的非敏感配置 |
+## C. 请求连不上、很慢或跨域：网络词汇
 
-详见 [配置与环境管理](/back-end/frontend-backend-guide/25-config-and-env) 和 [Spring 配置](/back-end/java/07b-spring-config)。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| DNS | 将域名等名称解析到网络记录的系统 | 通过服务名寻找地址 | DNS 成功不说明端口可达或 HTTP 正常 | [网络](/back-end/frontend-backend-guide/22-networking-for-backend) |
+| IP / 端口 | IP 标识网络接口地址，端口用于区分传输端点 | 找到 `task-api` 的监听位置 | 容器的 localhost、宿主机 localhost 不一定是同一网络空间 | [网络](/back-end/frontend-backend-guide/22-networking-for-backend) |
+| TCP | 提供可靠、有序字节流的传输协议 | 在连接上交换 HTTP 等应用数据 | TCP 确认不等于应用已提交事务，也没有业务消息边界 | [网络](/back-end/frontend-backend-guide/22-networking-for-backend) |
+| TLS / HTTPS | TLS 提供传输安全，HTTPS 是 HTTP over TLS | 验证对端、保护链路机密性和完整性 | HTTPS 不替代授权，也不保护已泄露的服务端日志 | [安全](/back-end/frontend-backend-guide/32-security) |
+| HTTP 方法 / 状态码 | 请求操作语义与响应结果分类 | 表达创建、查询、无权限、冲突等契约 | 状态码不是“前端/后端谁背锅”的绝对判定 | [API](/back-end/frontend-backend-guide/34-api-design) |
+| Origin 同源 | 通常由协议、主机、端口组成的源标识 | 浏览器划分脚本可访问的资源边界 | 同站与同源不同；不同端口已经跨源 | [网络](/back-end/frontend-backend-guide/22-networking-for-backend) |
+| CORS | 浏览器控制跨源脚本读取响应等行为的机制 | 按策略开放跨源 API 访问 | 不拦 curl，不是登录鉴权，也不能代替 CSRF 防护 | [安全](/back-end/frontend-backend-guide/32-security) |
+| 反向代理 | 代表后端接收客户端请求再转发的组件 | 统一入口、TLS 终止、路由 | 不只是开发代理，转发头也有信任边界 | [网络](/back-end/frontend-backend-guide/22-networking-for-backend) |
+| 负载均衡 | 按策略把请求分给多个后端实例 | 分摊负载并避开不健康实例 | 不会自动复制内存会话或修复数据库瓶颈 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| Gateway 网关 | 集中路由和部分通用策略的入口组件 | 统一接入、粗粒度认证和限流 | 有网关不等于业务层可以省略细粒度授权 | [安全](/back-end/frontend-backend-guide/32-security) |
+| Timeout 超时 | 某段等待达到上限 | 限制连接、读写、整体请求的资源占用 | 超时是结果可能未知，不证明下游没有执行 | [排查](/back-end/frontend-backend-guide/27-troubleshooting-methodology) |
+| Keep-alive / 连接复用 | 在多个请求间复用已有连接 | 降低重复建连开销 | HTTP 复用、TCP 保活探测、数据库连接池不是同一机制 | [连接池](/back-end/frontend-backend-guide/13-connection-pools) |
+| RPC / HTTP Client | 跨进程调用方式与其客户端实现 | 调用外部服务或另一个业务服务 | 方法签名像本地调用，不代表延迟、失败和事务语义像本地 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
 
-## 数据库术语
+## D. 数据写不对、查不快：数据库词汇
 
-后端的一大块工作就是和数据库打交道。本项目主库是 MongoDB（文档型），统计用 MySQL（关系型），缓存用 Redis。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| RDBMS / MySQL | 以关系模型和 SQL 为核心的数据库系统 | 用表、约束与事务持久管理业务数据 | 关系型不等于只能固定格式，也不是任何查询都快 | [数据库选择](/back-end/frontend-backend-guide/09-sql-vs-nosql) |
+| H2 | 可嵌入运行的 Java 关系数据库 | 第一课降低安装和启动成本 | 内存模式重启会丢数据，MySQL 兼容模式也不等于 MySQL | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| NoSQL | 对多种非传统关系数据库的宽泛分类 | 满足文档、键值、图等不同访问模式 | 不是“没有 schema”或“都不支持事务”的统一产品 | [数据库选择](/back-end/frontend-backend-guide/09-sql-vs-nosql) |
+| ORM / MyBatis | ORM 做对象关系映射；MyBatis 更偏 SQL 与结果映射 | 组织持久化访问，减少重复映射代码 | 不等于自动写出最优 SQL，也不保证不会注入 | [SQL](/back-end/frontend-backend-guide/10-sql-and-indexes) |
+| 主键 / 唯一约束 | 标识一行，以及限制一组列取值不得重复的约束 | 保证业务标识与去重的最终一致性 | “先查没有再插”无法替代数据库唯一约束 | [SQL](/back-end/frontend-backend-guide/10-sql-and-indexes) |
+| 索引 Index | 为特定访问路径维护的数据结构 | 减少扫描、支持排序或约束 | 索引不是内存 Map；写入、存储与维护也有成本 | [SQL](/back-end/frontend-backend-guide/10-sql-and-indexes) |
+| 联合索引 | 按多个列组织的索引 | 优化常见组合条件，如 owner + status + id | 不是把所有字段都加进去就一定有效，需看顺序和查询 | [SQL](/back-end/frontend-backend-guide/10-sql-and-indexes) |
+| EXPLAIN | 查看数据库计划如何执行 SQL 的工具 | 验证索引、扫描行数、连接方式的假设 | 计划不是所有真实运行时成本，仍需结合实际数据和耗时 | [SQL](/back-end/frontend-backend-guide/10-sql-and-indexes) |
+| 事务 / ACID | 一组操作的提交边界及原子、隔离、持久等性质 | 让相关本地修改保持约定的不变量 | 不自动包含另一数据库或第三方接口；一致性也靠业务约束 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| 隔离级别 | 并发事务对彼此修改的可见性与冲突规则 | 控制脏读、不可重复读等行为 | 不同数据库同名级别仍有细节差异，不是越高越无代价 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| MVCC | 用多版本等机制协调读写可见性 | 让某些一致性读取不必阻塞写入 | 不等于任何查询都不加锁，也不消除所有写冲突 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| 乐观锁 | 更新时验证版本/条件，冲突则拒绝或重试 | 防止并发覆盖任务状态 | “乐观”不是无需条件检查；重试也必须有上限 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| 悲观锁 / 行锁 | 通过数据库锁协调冲突操作 | 在事务中保护必须串行修改的记录 | 实际锁范围受索引和语句影响，不一定只锁你想的那一行 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| 连接池 | 管理和复用一组数据库/HTTP 等连接 | 控制建连成本与并发资源 | 池越大不一定越快，等待池连接也会形成超时 | [连接池](/back-end/frontend-backend-guide/13-connection-pools) |
+| 读写分离 / 复制延迟 | 写主库、部分读副本；复制存在时间差 | 扩展读取或提升容灾能力 | 刚写后读副本可能看不到，不能假设实时强一致 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **Collection（MongoDB）** | 一个 JSON 数组文件 | MongoDB 里的"表"，存一堆同类文档。如 `canvas_task` 集合存所有生图任务 |
-| **Document（MongoDB）** | 一个 JSON 对象 | MongoDB 里的"行"，一条数据记录，结构灵活 |
-| **Table（MySQL）** | Excel 表格 | MySQL 里的表，列定义固定，改结构要 `ALTER TABLE` |
-| **Row / Record（MySQL）** | 表格中的一行 | MySQL 里的一条记录 |
-| **Index（索引）** | `Map` 的 key / 字典目录 | 加速查询的数据结构，没索引就全表扫描（相当于遍历整个数组） |
-| **ORM / ODM** | Prisma / Drizzle | 用对象操作数据库而非手写 SQL，如 Spring Data JPA、MyBatis |
-| **事务（Transaction）** | "原子操作"——要么都做要么都不做 | 多个 DB 操作捆绑：扣配额 + 写订单，必须一起成功，否则回滚 |
-| **乐观锁 / 悲观锁** | 版本号比对 vs 加锁 | 乐观锁靠 `version` 字段冲突重试；悲观锁直接 `SELECT ... FOR UPDATE` 锁住 |
+## E. 同时执行很多事：线程、异步与内存
 
-详见 [SQL vs NoSQL](/back-end/frontend-backend-guide/09-sql-vs-nosql)、[SQL 与索引](/back-end/frontend-backend-guide/10-sql-and-indexes) 和 [关系型 vs NoSQL](/back-end/database/basics/relational-vs-nosql)。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| 进程 / 线程 | 进程拥有资源边界，线程是在进程内被调度的执行单元 | 组织隔离与并发执行 | 一个线程不等于一个事件循环，进程也可能有很多线程 | [并发起步](/back-end/frontend-backend-guide/14-single-thread-to-multithread) |
+| 并发 / 并行 | 并发是多个工作交错推进，并行是同时执行 | 描述任务执行关系和硬件利用 | 不需要多核才能有并发问题，异步 JS 也可能有逻辑竞态 | [并发起步](/back-end/frontend-backend-guide/14-single-thread-to-multithread) |
+| 同步 / 异步 | 调用方等待完成，或通过后续机制获知结果 | 组织等待与完成通知 | 异步不等于并行、不等于更快、更不等于任务持久化 | [异步](/back-end/frontend-backend-guide/17-async-programming) |
+| 线程池 / Executor | 有界组织线程、队列与执行策略的设施 | 复用线程并控制资源使用 | 无界排队可能 OOM；线程越多不一定吞吐越高 | [线程池](/back-end/frontend-backend-guide/15-thread-pools-executor) |
+| Future / CompletableFuture | 表达未来结果及其组合的抽象 | 协调异步完成、失败和依赖关系 | 不会自动保证事务、超时取消或上下文正确传播 | [异步](/back-end/frontend-backend-guide/17-async-programming) |
+| 竞态条件 Race Condition | 结果依赖未被约束的执行时序 | 解释“偶现覆盖、重复扣减”等并发缺陷 | 不只来自 Java 多线程；先查后写也可能跨请求竞态 | [线程安全](/back-end/frontend-backend-guide/16-thread-safety-locks) |
+| synchronized / Lock | 协调临界区互斥及相关内存可见性的机制 | 保护进程内共享状态 | JVM 内的锁不能直接保护另一个实例的内存或整个分布式业务 | [线程安全](/back-end/frontend-backend-guide/16-thread-safety-locks) |
+| 原子类 / CAS | 单操作原子更新及比较并交换机制 | 安全地更新计数器等小状态 | 多个原子操作组合起来不自动成为一个原子业务流程 | [线程安全](/back-end/frontend-backend-guide/16-thread-safety-locks) |
+| 死锁 Deadlock | 执行者持有资源并循环等待对方 | 定位无法继续推进的锁等待 | 不只是 CPU 高；数据库与线程都可能死锁，普通慢查询不一定是死锁 | [线程安全](/back-end/frontend-backend-guide/16-thread-safety-locks) |
+| ThreadLocal | 给每个线程维护独立关联值的机制 | 保存有限的线程上下文 | 线程池会复用线程，不清理可能泄漏/串上下文；跨线程不自动传播 | [线程池](/back-end/frontend-backend-guide/15-thread-pools-executor) |
+| Heap / Stack | Java 堆承载对象等，线程栈承载调用帧等 | 理解对象占用与调用深度 | 对象引用在栈里不代表对象本身一定在栈中 | [JVM 内存](/back-end/frontend-backend-guide/18-jvm-memory-model) |
+| JMM | Java 内存模型对共享内存可见性、有序性等的规范 | 推理跨线程读写能看到什么 | 不等于 JVM 堆、栈这些运行时内存区域的布局 | [JVM 内存](/back-end/frontend-backend-guide/18-jvm-memory-model) |
+| GC / STW | 回收不可达对象；某些阶段暂停应用线程 | 自动管理对象内存并分析停顿 | GC 不保证回收仍被引用的废弃对象，也不是什么 GC 都全程停顿 | [GC](/back-end/frontend-backend-guide/19-garbage-collection) |
+| OOM / 内存泄漏 | 无法满足分配；不再需要的对象/资源仍被保留 | 定位内存不足与持续增长 | OOM 不一定由泄漏导致，也不总是堆太小 | [OOM](/back-end/frontend-backend-guide/20-oom-memory-leak) |
+| Thread dump / Heap dump | 线程栈快照 / 对象堆快照 | 分别排查阻塞死锁与对象保留关系 | 两者不能互相替代，堆快照可能很大且含敏感数据 | [诊断工具](/back-end/frontend-backend-guide/29-diagnostic-toolbox) |
 
-## 微服务术语
+## F. 后台任务与消息为什么会重复
 
-单体应用拆成一堆小服务后，多出很多"协调"相关的词。可以类比成：前端从一个大 SPA 拆成了一堆微前端 + BFF，彼此通过网络调用。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| 持久任务 Job | 数据库等可靠存储中的执行意图与状态 | HTTP 返回后继续处理并在重启后恢复 | 只是 `@Async` 或线程池中一个 Runnable 不算持久任务 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| MQ / Broker | 跨进程消息系统及其中转存储节点 | 异步解耦、暂时缓冲、独立消费 | MQ 不是 EventEmitter；必须考虑存储、确认、重投、保留期限 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| Producer / Consumer | 发布消息的一方 / 处理消息的一方 | 分离事件产生与后续处理 | 收到发送确认不代表消费者业务已成功 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| Topic / Queue | 产品中用于分类路由、存储或分配消费的抽象 | 组织消息订阅与处理 | 两者不总能互换，不同产品的订阅、分区、竞争语义不同 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| Consumer Group | 共同承担某个订阅处理的一组消费者 | 分摊处理负载，独立业务分别消费 | “组内分摊、组间独立”是常见模型，但不宜套给任何产品配置 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| ack / offset | 消费确认 / 消费位点等处理进度概念 | 告知系统哪些消息可视为已处理 | ack 不必然立即删除消息，提前 ack 可能造成业务漏处理 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| at-least-once | 满足约定前提下至少一次投递的语义 | 在故障后允许重投以追求可恢复 | 不代表没有重复或业务必成功，保留期与失败流程仍有限 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| exactly-once | 在明确系统范围内恰好一次的处理/效果承诺 | 用事务和去重避免范围内重复效果 | 某产品内部保证不能自动扩展到短信、支付等任意外部副作用 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| 幂等 Idempotency | 重复执行同一逻辑操作产生等价业务效果 | 使重试与重复消息不会重复创建/扣费 | 不意味着响应字节次次相同，也不是先查一遍就够 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| Outbox | 与业务同事务保存的待发布事件记录模式 | 避免业务提交后发送意图丢失 | 不消除重复，不把数据库和 Broker 变成一个本地事务 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| CDC | 从数据库变更日志等捕获数据变化的机制 | 将已提交变更同步到事件或搜索投影 | 不等于无运维成本，也不自动解决所有业务事件语义 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| 退避 / 抖动 | 逐渐拉长重试间隔 / 给间隔加随机性 | 防止故障时重试洪峰与同步碰撞 | 无限重试或所有层各自重试会放大故障 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| DLQ 死信队列 | 隔离多次失败或无法处理消息的设施 | 停止无效重试并提供诊断恢复入口 | 进入 DLQ 不等于业务完成，必须有告警与重放治理 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| 延迟消息 | 到未来某时刻后才可被投递/看见的消息 | 延后一次检查或执行机会 | 不等于周期调度，不自动处理漏跑、补跑与时区 | [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map#batch-jobs) |
+| 积压 Backlog | 尚未处理完的消息/任务集合 | 反映生产与消费的供需差 | 只看条数不够，还要看最老年龄、处理时限与吞吐 | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **网关（Gateway）** | dev server proxy / Nginx 反向代理 | 统一入口，做路由、鉴权、限流。本项目即 `svc-gateway` |
-| **服务发现（Service Discovery）** | DNS 解析 / 服务注册中心 | 不写死 IP，靠名字（如 `svc-ai`）找到目标服务的实例地址 |
-| **熔断（Circuit Breaker）** | 错误边界（Error Boundary） | 某服务挂了就快速失败、不再调用，避免雪崩。类似断路器跳闸 |
-| **降级（Fallback）** | 兜底 UI / 默认值 | 服务不可用时返回替代数据，如返回缓存旧结果或"系统繁忙" |
-| **限流（Rate Limiting）** | 防抖 / 节流 | 限制单位时间请求数，保护服务。如每用户每分钟最多提交 5 次生图 |
-| **负载均衡（Load Balancing）** | — | 把请求分散到多个服务实例，避免单点过载 |
-| **Topic（消息队列）** | 事件名（`eventBus.on('xxx')`） | 消息的分类标识，生产者发到 Topic，消费者订阅 Topic |
-| **Consumer Group** | — | 一组消费者共同消费一个 Topic，组内分摊消息，组间各收一份 |
-| **幂等（Idempotent）** | 同一请求重复发结果不变（如 `PUT`） | 同一个生图任务消息消费两次，不能扣两次配额 |
+## G. 多实例与依赖故障：分布式词汇
 
-详见 [架构总览](/back-end/frontend-backend-guide/02-architecture-overview) 和 [API 设计](/back-end/frontend-backend-guide/34-api-design)。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| Redis | 支持多种数据结构的网络数据存储 | 缓存、计数等低延迟访问场景 | 不是浏览器 sessionStorage；持久性与故障语义需单独配置评估 | [Redis](/back-end/frontend-backend-guide/12-redis-in-practice) |
+| Cache-aside | 应用读缓存、未命中读库并回填的模式 | 降低重复读取的数据库负载 | 更新与失效存在竞态，缓存不是天然事实源 | [Redis](/back-end/frontend-backend-guide/12-redis-in-practice) |
+| TTL | 数据或租约的存活时间 | 控制缓存新鲜度、自动过期等 | 过期不等于业务已完成，也不保证旧执行者已停止 | [Redis](/back-end/frontend-backend-guide/12-redis-in-practice) |
+| 限流 Rate Limiting | 按主体、时间或容量限制流量的服务端策略 | 保护资源、控制滥用与成本 | 不是前端防抖；攻击者可绕过页面，多个实例也要考虑计数范围 | [性能](/back-end/frontend-backend-guide/31-performance-concurrency) |
+| 熔断 Circuit Breaker | 故障阈值触发后暂时快速拒绝依赖调用的状态机制 | 减少等待坏依赖引发的资源耗尽 | 不等于 UI Error Boundary，也不负责修好下游 | [排查](/back-end/frontend-backend-guide/28-troubleshooting-playbook) |
+| 降级 Fallback | 依赖/资源受限时提供约定的替代能力 | 保住较小但可用的核心体验 | 不能把失败伪装为成功，支付失败不该降级成“已支付” | [性能](/back-end/frontend-backend-guide/31-performance-concurrency) |
+| 背压 Backpressure | 下游能力不足时向上游传递减速或拒绝信号 | 防止无界排队耗尽资源 | 有队列不等于有背压，入口仍可能无限受理 | [线程池](/back-end/frontend-backend-guide/15-thread-pools-executor) |
+| 服务发现 | 通过名称/注册信息定位可用实例 | 实例变化时不手写每个 IP | 不等于发现后就健康、可认证或不会超时 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| 分布式锁 / 租约 | 多节点协调排他执行的机制 / 有效时间限制 | 限制多个 worker 同时认领等操作 | 锁超时后旧执行者仍可能运行，需幂等、持有者校验或 fencing | [消息任务](/back-end/frontend-backend-guide/33-mq-reliability) |
+| 最终一致性 | 无新更新且传播恢复等前提下，副本最终收敛的模型 | 允许异步同步以换取某些可用性/性能 | 不是“过一会自然正确”，需要重试、对账与冲突处理 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
+| Saga / 补偿 | 用一系列本地事务及补偿动作协调长业务流程的模式 | 无法单一本地事务覆盖的多步骤业务恢复 | 补偿不是数据库回滚，已发邮件无法撤回成没发生 | [事务](/back-end/frontend-backend-guide/11-transactions-consistency) |
 
-## 并发与 JVM 术语
+## H. 登录与数据暴露：安全词汇
 
-这块是前端最陌生的领域。前端是单线程 + 事件循环（你写 `Promise`、`async/await` 时不用操心"两段代码同时改同一个变量"），而 Java 是真·多线程：一个服务里几百个线程真的在同时跑，于是有了锁、原子类、死锁这些概念。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| 认证 / 授权 | 验明身份 / 判断允许执行的动作与资源范围 | 区分“是谁”和“能干什么” | 登录成功不代表可以操作任意任务 | [安全](/back-end/frontend-backend-guide/32-security) |
+| Session | 服务端管理的会话状态与其引用标识 | 在多次请求中持续识别登录会话 | Cookie 一般放会话 ID，不是把密码或完整身份表塞进去 | [安全](/back-end/frontend-backend-guide/32-security) |
+| JWT | 承载声明的标准令牌格式，常见为签名形式 | 在系统间传递可验证的声明 | JWT 不等于 localStorage；解码不等于验签；签名不等于加密 | [安全](/back-end/frontend-backend-guide/32-security) |
+| Access / Refresh Token | 资源访问凭据 / 获取新访问凭据的受控凭据 | 平衡短访问寿命与持续登录体验 | 删除 refresh 不自动撤销已签发 access；刷新接口也需安全防护 | [安全](/back-end/frontend-backend-guide/32-security) |
+| 密码哈希 / Salt | 专用单向密码验证结果 / 每份密码随机盐 | 降低拖库后批量猜解的效率 | 盐不必保密；裸 SHA、前端哈希和可逆加密不能替代密码哈希 | [安全](/back-end/frontend-backend-guide/32-security) |
+| CSRF | 利用浏览器自动携带凭据执行非预期请求的攻击 | 解释 Cookie 写操作为何需要额外请求证明 | JWT 放 Cookie 仍可能有风险；CORS 不等于 CSRF 防护 | [安全](/back-end/frontend-backend-guide/32-security) |
+| XSS | 不可信脚本在受害者页面上下文执行 | 解释危险 HTML、模板与不安全输出风险 | HttpOnly 只能阻止读取 Cookie，不能阻止恶意脚本发请求 | [安全](/back-end/frontend-backend-guide/32-security) |
+| IDOR / 越权 | 通过直接对象引用访问无权访问的资源等权限缺陷 | 检查“改 ID 就能读别人任务”的漏洞 | 使用 UUID 或隐藏按钮不能代替服务端数据范围检查 | [安全](/back-end/frontend-backend-guide/32-security) |
+| MFA | 使用不同类别因素的多因素身份验证 | 降低单一凭据泄露导致接管的风险 | 两个密码不是两个独立因素，恢复流程也要安全 | [安全](/back-end/frontend-backend-guide/32-security) |
+| OAuth 2.0 | 让应用获取资源有限访问权的授权框架 | 不把用户第三方密码交给本应用 | OAuth 本身不完整定义登录身份；使用提供方正式流程和成熟库 | [安全](/back-end/frontend-backend-guide/32-security) |
+| OIDC | 在 OAuth 2.0 上增加标准身份层的协议 | 统一登录与身份声明验证 | ID Token 不应当作所有业务 API 都接受的 access token | [安全](/back-end/frontend-backend-guide/32-security) |
+| SSO | 多个应用复用身份提供方登录状态的架构/体验 | 减少用户跨应用重复登录 | 不是所有应用共享 localStorage；各会话注销范围需设计 | [安全](/back-end/frontend-backend-guide/32-security) |
+| SSRF | 服务端被诱导请求攻击者指定目标的攻击 | 防止 URL 转存、Webhook 等功能访问内部资源 | 只检查字符串以 http 开头远远不够，重定向和解析也有风险 | [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map#attachments) |
+| 最小权限 | 只授予完成工作所需的权限 | 限制账号或组件被攻破后的影响范围 | “内网”“管理员”“服务账号”都不是无限信任的理由 | [安全](/back-end/frontend-backend-guide/32-security) |
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **线程（Thread）** | 一个独立的"事件循环"在跑 | 真正并行的执行单元。Tomcat 默认开一批线程，每个请求占一个 |
-| **线程池（Thread Pool）** | 复用连接的连接池 / 任务队列 | 预先创建一批线程循环复用，避免频繁创建销毁。如 `svc-ai` 用线程池跑生图任务 |
-| **synchronized / Lock** | （前端没有，因为单线程不需要） | 加锁：保证同一时刻只有一个线程进入这段代码。`Lock` 是更灵活、可手动加解锁的版本 |
-| **原子类（AtomicInteger 等）** | — | 无锁的线程安全计数器，`incrementAndGet()` 不会出现"读了又被别人改"的问题 |
-| **竞态条件（Race Condition）** | 两个 `setState` 互相覆盖那种感觉 | 多线程不加保护地改同一数据，结果取决于执行顺序，时对时错最难查 |
-| **死锁（Deadlock）** | 两个 `await` 互相等对方（循环依赖卡死） | 线程 A 拿着锁 1 等锁 2，线程 B 拿着锁 2 等锁 1，谁都不让，永久卡住 |
-| **堆（Heap）** | JS 引擎里存对象的那块内存 | 存放 `new` 出来的对象，所有线程共享，GC 主要管这里 |
-| **栈（Stack）** | 函数调用栈（call stack） | 每个线程一份，存方法调用和局部变量，方法返回就弹出 |
-| **GC（垃圾回收）** | V8 的垃圾回收（你从不手动管） | 自动回收没人引用的对象内存。Java 和 JS 都有，但 Java 可调参数多得多 |
-| **STW（Stop-The-World）** | 主线程被一段同步代码卡住、页面卡顿 | GC 某些阶段会暂停所有业务线程，停顿过长就是性能问题 |
-| **Minor GC / Full GC** | 小扫一遍 vs 大扫除 | Minor GC 只清新生代、快；Full GC 清整个堆、慢且常伴随长 STW，频繁 Full GC 是危险信号 |
-| **OOM（OutOfMemoryError）** | 标签页"Aw, Snap"内存崩溃 | 内存不够用，JVM 直接抛错。常见于内存泄漏或堆设得太小 |
-| **内存泄漏（Memory Leak）** | 忘了 `removeEventListener` 导致对象回收不掉 | 对象用完了却还被引用，GC 回收不了，越积越多最终 OOM |
-| **thread dump（线程快照）** | 把所有"事件循环"当前在干什么打印出来 | 某一刻所有线程的调用栈快照，查死锁、查卡住、查 CPU 飙高的首选 |
-| **heap dump（堆快照）** | Chrome DevTools 的 Heap Snapshot | 某一刻堆里所有对象的快照，用来查内存泄漏到底是谁占着不放 |
-| **Metaspace** | — | 存类元数据的独立内存区（不在堆里），类加载过多或动态生成类会把它撑爆 |
+## I. 功能评审：从同事用词回到需求
 
-详见 [线程池与 Executor](/back-end/frontend-backend-guide/15-thread-pools-executor)、[线程安全与锁](/back-end/frontend-backend-guide/16-thread-safety-locks)、[JVM 内存模型](/back-end/frontend-backend-guide/18-jvm-memory-model)、[垃圾回收](/back-end/frontend-backend-guide/19-garbage-collection) 和 [OOM 与内存泄漏排查](/back-end/frontend-backend-guide/20-oom-memory-leak)。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| RBAC / ABAC | 按角色授权 / 按主体、资源、环境属性判断的授权模型 | 管理团队权限与更细动态规则 | 两者可结合，不必每条 owner 校验都先上策略引擎 | [协作权限](/back-end/frontend-backend-guide/39-backend-feature-map#collaboration) |
+| 多租户 Multi-tenancy | 一套产品服务多个客户组织的隔离设计 | 避免不同客户数据和操作串用 | 不只是加 tenant_id；缓存、文件、搜索、后台任务同样要隔离 | [协作权限](/back-end/frontend-backend-guide/39-backend-feature-map#collaboration) |
+| 对象存储 OSS / S3 | 按对象键保存与访问文件等大对象的存储服务 | 附件独立保存、多实例共享、生命周期管理 | 不等于 CDN，也不自动知道谁有权看任务附件 | [附件](/back-end/frontend-backend-guide/39-backend-feature-map#attachments) |
+| CDN | 通过边缘缓存等方式分发内容的网络服务 | 降低下载延迟与源站负载 | 不能替代源存储，私有内容也不能不管鉴权与缓存撤销 | [附件](/back-end/frontend-backend-guide/39-backend-feature-map#attachments) |
+| 签名 URL | 对特定资源、动作和有效窗口签出的访问能力 | 客户端受限直传/直下，不暴露永久密钥 | 通常持有即可使用，泄露后有风险，也未必可即时撤销 | [附件](/back-end/frontend-backend-guide/39-backend-feature-map#attachments) |
+| 分片上传 | 把一个大对象拆成多段传输后完成合并的机制 | 大文件补传、减少单次失败重传量 | 还要校验 uploadId 归属、完成状态和残片清理 | [附件](/back-end/frontend-backend-guide/39-backend-feature-map#attachments) |
+| 批处理 Batch | 对一组数据按批组织验证和处理的方式 | 控制导入/导出的资源、事务和恢复粒度 | 不等于全部数据放进一个超大事务 | [导入导出](/back-end/frontend-backend-guide/39-backend-feature-map#batch-jobs) |
+| cron / 调度 Scheduler | 时间规则表达式 / 产生执行机会并管理运行的机制 | 定期生成报表与清理任务 | cron 方言有五/六字段等差异；准确触发不等于执行成功 | [导入导出](/back-end/frontend-backend-guide/39-backend-feature-map#batch-jobs) |
+| 分布式调度 | 多节点协调任务触发、认领、分片和故障恢复 | 多实例下避免无意重复并分摊作业 | 给每个副本都加 @Scheduled 不是完成协调 | [导入导出](/back-end/frontend-backend-guide/39-backend-feature-map#batch-jobs) |
+| ES / 倒排索引 | Elasticsearch 搜索引擎 / 词项到文档的检索结构 | 全文分词、相关性、高亮等搜索需求 | SQL 数据库也有全文索引，ES 不能无成本取代数据库事实源 | [搜索](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| Webhook / 支付回调 | 通过 HTTP 主动推送事件 / 支付领域通知 | 系统之间获知事件与支付事实 | 浏览器跳回成功页不是支付事实，通知也可能重复乱序 | [回调](/back-end/frontend-backend-guide/39-backend-feature-map#webhooks) |
+| 签名 / 防重放 | 验证消息来源与完整性 / 限制旧消息再利用 | 拦截伪造和恶意重放请求 | 签名正确仍可能是旧消息；防重放也不代替业务幂等 | [回调](/back-end/frontend-backend-guide/39-backend-feature-map#webhooks) |
+| 状态机 / 工作流 | 状态及合法转移模型 / 多步骤业务协作编排 | 管控任务完成、审核、退回等流程 | 有 status 字段不代表能随意转移；引擎不自动回滚外部副作用 | [工作流](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| 软删除 | 保留记录并标记为已删除的策略 | 回收站与误删恢复 | 不是物理删除，也不自动满足隐私擦除要求 | [审计与删除](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| 审计 / 数据脱敏 | 可追踪的操作记录 / 限制字段暴露的处理 | 追责与降低个人数据泄露范围 | 普通日志不自动防篡改，脱敏不等于加密或匿名化 | [审计与删除](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| 站内信 / 短信 / 邮件 | 应用内持久通知与外部触达渠道 | 提醒不在线用户或展示未读状态 | MQ 成功、供应商受理、实际送达是不同阶段 | [通知](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| 数据字典 | 业务编码及展示项等可管理元数据 | 维护优先级、分类等选项 | 改展示名不应任意更换稳定 code，也不必一切做成动态字典 | [配置功能](/back-end/frontend-backend-guide/39-backend-feature-map) |
+| Feature Flag | 服务端受控的功能启用与定向放量开关 | 灰度上线、实验或紧急关闭 | 不是授权；关闭后不撤销既有副作用，旧开关也需清理 | [配置功能](/back-end/frontend-backend-guide/39-backend-feature-map) |
 
-## 运维与可观测术语
+## J. 代码到了服务器：容器、配置与发布
 
-代码写完只是开始，真正"学成后端"还得会把它跑到服务器上、塞进容器、上 K8s、出问题能从日志和指标里把锅刨出来。这部分前端基本是空白，但概念其实不难。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| Maven / pom.xml | Java 项目构建与依赖管理工具 / 其项目描述文件 | 编译、测试、解析依赖与打包 | 与 pnpm 有部分相似职责，但生命周期和产物不是简单同名替换 | [Java](/back-end/frontend-backend-guide/05-java-crash-course) |
+| 环境配置 / Profile | 按运行环境选择的参数与配置集合 | 本地 H2、测试/生产 MySQL 等差异 | 非秘密配置与密钥应区分；环境名不是权限边界 | [配置](/back-end/frontend-backend-guide/25-config-and-env) |
+| 镜像 Image | 用于启动容器的只读分层文件系统模板与配置 | 固化应用及其运行依赖 | 不包含一个自带独立内核的完整虚拟机 | [Docker](/back-end/frontend-backend-guide/23-docker-in-practice) |
+| Docker / Container | 容器工具生态 / 隔离进程及资源视图的运行实例 | 统一交付运行环境和资源边界 | Linux 容器共享所运行宿主的内核；macOS Docker Desktop 常通过 Linux VM 承载，不是每容器一套内核 | [Docker](/back-end/frontend-backend-guide/23-docker-in-practice) |
+| Dockerfile | 声明镜像构建步骤的文件 | 可复现地组织基础镜像与应用产物 | 把密钥 COPY 进去后再删除仍可能留在镜像层中 | [Docker](/back-end/frontend-backend-guide/23-docker-in-practice) |
+| Pod | Kubernetes 的最小可部署单元，含一个或多个共享部分运行上下文的容器 | 调度协同运行的容器 | 不是独立小虚拟机，Pod 也会被替换、地址会变 | [Kubernetes](/back-end/frontend-backend-guide/24-kubernetes-in-practice) |
+| Deployment | 管理一组 Pod 副本与更新策略的控制器 | 声明副本数、滚动更新与恢复 | 不自动确保业务无损、数据库迁移兼容或请求排空 | [Kubernetes](/back-end/frontend-backend-guide/24-kubernetes-in-practice) |
+| Service（Kubernetes） | 为一组后端提供稳定访问抽象的资源 | 访问会变化的 Pod 集合 | 不等于 Java 业务 Service，也不自动暴露为公网入口 | [Kubernetes](/back-end/frontend-backend-guide/24-kubernetes-in-practice) |
+| Ingress | 对 HTTP(S) 外部访问规则的声明，需控制器落实 | 按域名、路径把流量送到 Service | 只有 YAML 没有控制器并不会自动产生入口 | [Kubernetes](/back-end/frontend-backend-guide/24-kubernetes-in-practice) |
+| ConfigMap / Secret | Kubernetes 的非秘密配置 / 敏感数据承载资源 | 分开管理运行配置与凭据 | Secret 的 Base64 不是加密，仍需 RBAC、静态加密、轮换等保护 | [配置](/back-end/frontend-backend-guide/25-config-and-env) |
+| Readiness / Liveness | 是否可接流量 / 是否需要重启的探测语义 | 避免未就绪接流量，并恢复异常进程 | 把所有下游故障都当存活失败可能引发重启风暴 | [Kubernetes](/back-end/frontend-backend-guide/24-kubernetes-in-practice) |
+| OOMKilled / CrashLoopBackOff | 内存相关强杀原因 / 反复退出后的重启退避状态 | 识别容器为何不可用 | 不等同 Java 堆 OOM；后者也不是具体根因，要看退出原因和历史日志 | [排查手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook) |
+| CI/CD | 持续集成与持续交付/部署的一组实践 | 自动验证、打包、发布并保留证据 | 自动部署不自动提供测试质量、审批、回滚或数据恢复 | [交付](/back-end/frontend-backend-guide/36-cicd-deployment) |
+| 滚动 / 蓝绿 / 金丝雀发布 | 分批替换 / 双环境切换 / 小流量验证的发布策略 | 在成本、验证和切换风险间权衡 | 不是都天然零停机；共享数据库变更仍可能无法回滚 | [交付](/back-end/frontend-backend-guide/36-cicd-deployment) |
 
-| 后端术语 | 前端对应概念 | 详细说明 |
-| --- | --- | --- |
-| **容器（Container）** | "把整个 node_modules + node 版本 + OS 一起打包" | 一个隔离的运行环境，保证"我本地能跑"等于"线上也能跑" |
-| **镜像（Image）** | 容器的"安装包" / Docker 版的 `dist` 产物 | 只读模板，容器是镜像跑起来的实例。一个镜像可启多个容器 |
-| **Docker** | — | 最主流的容器工具，负责构建镜像、运行容器 |
-| **Dockerfile** | 描述如何构建产物的脚本（Docker 版 `build.sh`） | 一行行指令告诉 Docker 如何打包镜像：基础镜像、拷贝 jar、启动命令 |
-| **Pod** | K8s 里最小的部署单位（≈ 一台小机器） | 一个或多个容器的组合，本项目里通常一个 Pod 跑一个 `svc-*` 实例 |
-| **Deployment** | 声明"我要几个副本"的清单 | 管理一组同样的 Pod，控制副本数、滚动更新、自愈重启 |
-| **Service（K8s）** | 一个稳定的内部域名 + 负载均衡 | 给一组会变动的 Pod 提供固定访问入口，别和上面业务层的 Service 混淆 |
-| **Ingress** | 前端的路由表 / Nginx 配置 | 七层入口，把外部域名/路径映射到内部 Service |
-| **ConfigMap** | `.env` 文件（非敏感） | 以键值对注入容器的非敏感配置 |
-| **Secret** | 加密存放的 `.env`（敏感） | 存密码、密钥、token 的配置，内容做 base64/加密处理 |
-| **kubectl** | K8s 的命令行 CLI（类比 `git` 之于 GitHub） | 操作集群的命令行工具，如 `kubectl get pods`、`kubectl logs` |
-| **CrashLoopBackOff** | 进程一启动就崩、反复重启那种状态 | Pod 启动后立刻挂、K8s 不停重启又不停挂，重试间隔越拉越长。多半是配置错或启动报错 |
-| **OOMKilled** | 标签页因内存超限被浏览器杀掉 | 容器内存超过 limit，被系统强杀。看到它先查内存上限和泄漏 |
-| **滚动发布（Rolling Update）** | 灰度替换、逐步上线 | 一批批替换旧 Pod，过程中服务不中断，K8s 默认策略 |
-| **蓝绿发布（Blue-Green）** | 准备一套新环境，切流量可一键回滚 | 新旧两套环境并存，流量整体切到新的，出问题秒回滚 |
-| **金丝雀发布（Canary）** | A/B 测试只放 5% 流量 | 先放一小部分流量到新版本，观察没问题再全量 |
-| **日志级别（Log Level）** | `console.debug/info/warn/error` | TRACE/DEBUG/INFO/WARN/ERROR 五档，线上一般只开 INFO 以上 |
-| **traceId** | 一次请求贯穿的请求 ID（链路追踪 header） | 一个请求穿过 `svc-gateway → svc-canvas → svc-ai` 都带同一个 id，便于把分散的日志串起来 |
-| **Logging / Metrics / Tracing** | 控制台日志 / 性能埋点 / 请求瀑布图 | 可观测性三大支柱：日志（发生了什么）、指标（多少/多快）、链路（请求走过哪些服务） |
-| **限流（Rate Limiting）** | 防抖节流 | 见上表，运维侧常在网关统一配置 |
-| **熔断（Circuit Breaker）** | 错误边界 | 见上表，依赖服务异常时快速失败保护自己 |
-| **降级（Degradation/Fallback）** | 兜底 UI | 见上表，主功能挂了给个最小可用结果 |
-| **幂等（Idempotent）** | 重试安全（同一 `PUT` 发几次结果一样） | 接口/消息支持重复执行不出错，是重试、消息消费的前提 |
-| **连接池（Connection Pool）** | axios 的 `keep-alive` 连接复用 | 预建一批数据库/HTTP 连接循环复用，避免每次新建握手的开销 |
-| **CI/CD** | GitHub Actions / Vercel 自动部署 | 持续集成（自动构建测试）/ 持续部署（自动发布），本项目 push `main` 即触发 |
+## K. 线上出问题：观测与排查词汇
 
-详见 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice)、[Kubernetes 实战](/back-end/frontend-backend-guide/24-kubernetes-in-practice)、[看懂日志](/back-end/frontend-backend-guide/26-reading-logs)、[可观测性](/back-end/frontend-backend-guide/30-observability) 和 [CI/CD 与部署](/back-end/frontend-backend-guide/36-cicd-deployment)。
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| Log 日志 | 带时间和上下文的离散事件记录 | 回答具体发生了什么 | 大量 DEBUG 不等于可排查；密码、token、签名 URL 不该完整记录 | [日志](/back-end/frontend-backend-guide/26-reading-logs) |
+| Metric 指标 | 按时间聚合的数值序列 | 看速率、趋势、容量与错误比例 | 不适合把每个 taskId、userId 都变成标签 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| Trace / Span | 一次操作链路及其中的一个步骤 | 定位请求在服务、数据库、外部调用间的耗时 | 单体也可追踪；采样与未埋点会造成不完整视图 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| traceId / requestId | 关联链路 / 请求的标识，具体语义按系统约定 | 串起一次操作的日志与追踪 | 不可用作认证凭据，也不等于业务幂等键 | [日志](/back-end/frontend-backend-guide/26-reading-logs) |
+| QPS / TPS | 每秒查询/请求量 / 每秒事务或处理量，需先约定口径 | 衡量入口和业务处理吞吐 | 一次 HTTP 可能产生多条 SQL，不同系统的 TPS 不能直接比较 | [性能](/back-end/frontend-backend-guide/31-performance-concurrency) |
+| P95 / P99 | 给定窗口内延迟分布的第 95/99 百分位 | 看平均值掩盖的尾部延迟 | 不是最大值，也不能直接平均多个实例的 P99 得到全局 P99 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| Histogram | 按桶记录分布的指标类型 | 聚合延迟并估算分位数 | 桶边界和采样口径会影响精度，不是任意精确分位 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| Cardinality 基数 | 指标标签值组合的数量 | 估算时序数量与存储/查询成本 | 每请求一个新标签值会让时序爆炸，详细 ID 更适合日志 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| SLI / SLO | 服务质量度量指标 / 对该指标设定的目标 | 以用户体验定义可靠性和告警 | 不是 CPU 使用率目标的同义词，需要时间窗口和统计口径 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| 错误预算 Error Budget | 按 SLO 在窗口中允许的不达标量 | 协调变更速度与可靠性投入 | 不是可以随意制造故障的额度 | [可观测](/back-end/frontend-backend-guide/30-observability) |
+| 假设验证 / 根因分析 | 用证据淘汰假设并分析机制的排查方法 | 避免看到慢就加内存、看到错就重启 | 时间先后、日志相关性不自动证明因果 | [排查方法](/back-end/frontend-backend-guide/27-troubleshooting-methodology) |
+| Runbook | 常见故障的诊断、处置与恢复手册 | 减少临场试错并明确安全操作 | 不是只有命令列表；应写前提、风险、验证与回退 | [排查手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook) |
 
----
+## 动手练习：把术语翻译成可验收的方案
 
-## 小结
+任选一条需求：“给我的任务加附件”“每天导出团队报表”或“任务完成后通知负责人”。用不超过十个术语写一页方案，每个术语必须说明：
 
-- 后端术语大多能在前端找到类比：Controller≈route handler、依赖注入≈`useContext`、熔断≈Error Boundary、连接池≈axios keep-alive，认知负担没想象中大。
-- **真正陌生的是两块**：并发/JVM（前端单线程，没有锁、死锁、GC 调参这些概念）和运维/可观测（容器、K8s、日志链路）。这两张表值得反复看。
-- 排查问题时术语就是"检索关键词"：看到 `OOMKilled` 先查内存上限和泄漏，看到 `CrashLoopBackOff` 先看启动日志，看到 Full GC 频繁先抓 heap dump。
-- `RtData`、`svc-*`、`cpt-*` 是本课程贯穿项目的命名约定，遇到先对号入座。
-- 这张表是"字典"，不必背；遇到生词回来查，看多了自然记住。
+1. 解决的具体问题，最简单方案是什么。
+2. 该能力失败后，如何知道、如何恢复、会不会重复。
+3. 哪些东西不是这个能力能保证的。
 
-### 自测
+**预期结果**：例如“任务完成发站内信”可以先用同一本地事务保存通知；需要外部投递后再评估 job/outbox。不是为了使用 MQ、Redis、微服务，把本来一个事务能解决的需求拆出三种故障窗口。更多案例见 [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)。
 
-1. 后端业务层的 **Service** 和 K8s 里的 **Service** 是同一个东西吗？它们各自类比前端的什么？
-2. 用前端概念解释一下：为什么前端代码几乎不用关心"竞态条件"和"锁"，而后端 Java 必须关心？
-3. 线上一个 `svc-ai` 的 Pod 反复重启、状态显示 `OOMKilled`，结合本表的术语，你会先去查哪几样东西？
+## 自测与答案
 
-### 下一章
+1. POJO 一定是 Bean 吗？
 
-把这些术语对应的高频命令攒成手边速查表，见 [命令速查表](/back-end/frontend-backend-guide/91-command-cheatsheet)。
+   **答案**：不是。POJO 描述普通 Java 对象风格；Spring Bean 描述对象是否由容器管理。普通 POJO 可以被注册为 Bean，也可以完全不进入容器。
+2. 为什么限流不是防抖、MQ 不是 EventEmitter？
+
+   **答案**：前者是服务端资源/流量政策，不依赖用户页面；后者涉及跨进程投递、存储、确认与恢复，本地事件分发不提供这些保证。
+3. JWT 存在哪，和它是不是 JWT 有什么关系？
+
+   **答案**：令牌格式与存储位置是两条独立决策。localStorage、Cookie、内存各有风险，必须按发送方式评估 XSS、CSRF 和撤销边界。
+4. Docker 镜像与 Kubernetes Secret 能否分别理解成“完整 OS”“加密配置”？
+
+   **答案**：不能。Linux 容器共享其运行宿主内核，镜像主要带用户态文件与配置；Secret 的 Base64 不提供机密性，需要额外访问和加密保护。
+5. 慢请求的 P99 很高，平均值正常，应该先加线程吗？
+
+   **答案**：先看时间窗口、样本与链路，检查连接池等待、锁、GC、数据库和依赖尾延迟；加线程可能加重拥堵。
+6. 延迟消息到期后就等于定时作业完成了吗？
+
+   **答案**：不是。可见/投递、被认领、实际执行成功是不同阶段；调度还需漏跑、补跑、时区、并发与历史记录。
+
+## 相关教程
+
+- [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)：先还原需求，再选技术。
+- [登录安全](/back-end/frontend-backend-guide/32-security) / [消息任务可靠性](/back-end/frontend-backend-guide/33-mq-reliability)：理解最容易被口号掩盖的边界。
+- [排查方法论](/back-end/frontend-backend-guide/27-troubleshooting-methodology) / [命令速查](/back-end/frontend-backend-guide/91-command-cheatsheet)：先有假设，后选命令。
+- [学习路径](/back-end/frontend-backend-guide/93-learning-path)：按最小主线使用词典，不必从头背完。

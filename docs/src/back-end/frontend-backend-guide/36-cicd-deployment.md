@@ -1,12 +1,17 @@
 # CI/CD 与部署
 
+::: info 按需查阅 · 不属于第一轮必修
+本页保留旧版微服务 / JVM / 运维专题，`svc-*`、`cpt-*` 和 `RtData` 是解释场景，不是仓库中另有一套完整源码，也不代表主线依赖。第一次学习请返回 [五阶段主线](./index)；命令和输出需按自己的授权环境、系统与版本验证，不直接复制到生产。故障注入只在隔离实验进行，dump 与日志也可能包含敏感数据。
+:::
+
+
 > 你写前端时早就用过 CI/CD，只是可能没意识到。`git push` 到 main，GitHub Actions 自动跑构建、把 `dist/` 发到 GitHub Pages——这个仓库的 VitePress 文档站就是这么上线的（`.github/workflows/deploy.yml`）。你从没手动 `scp` 过文件，也没登录服务器解压过 tar 包，一切都是「提交即上线」。
 >
 > 后端的 CI/CD 是同一个思想，只是链路更长：要编译 Java、跑测试、打 Docker 镜像、推镜像仓库、滚动更新 K8s、做健康检查。这一章把「从一次 `git push` 到 `svc-ai` 新版本在生产稳稳跑起来」这条流水线拆开讲透，并教你三种发布策略和怎么一键回滚。
 
 本章是 Part 7「工程化与上线」的核心。它建立在前面几章之上：[第二十三章 Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice) 教你打镜像、[第二十四章 Kubernetes 实战](/back-end/frontend-backend-guide/24-kubernetes-in-practice) 教你部署和探针、[第三十五章 测试](/back-end/frontend-backend-guide/35-testing) 教你写测试——CI/CD 就是把这些动作**自动串成一条线**。
 
-> 💡 **前端类比**：CI/CD 之于后端，就像 Vercel 之于你的 Next.js 项目。Vercel 帮你做的事（监听 push → 装依赖 → `next build` → 部署 → 给个预览 URL），后端要自己用 GitHub Actions + Docker + K8s 拼出来。区别只是后端没有 Vercel 这种「全托管」，得自己写流水线、自己管镜像和集群。
+> 💡 **前端类比**：CI/CD 之于后端，就像 Vercel 之于你的 Next.js 项目。Vercel 帮你做的事（监听 push → 装依赖 → `next build` → 部署 → 给个预览 URL），后端要自己用 GitHub Actions + Docker + K8s 拼出来。后端同样有 PaaS / 托管容器等交付选择，不一定要自己管理集群。本文选择 Actions + Docker + Kubernetes 展示一类自管流水线，不代表所有后端项目都必须如此。
 
 ---
 

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="650" viewBox="0 0 960 650" role="img" aria-labelledby="title desc">
+  <title id="title">task-api 后端功能地图：按需求逐步引入能力</title>
+  <desc id="desc">从单体任务 CRUD 出发，向多人协作、私有附件、批量作业和支付回调四个需求扩展。下方列出搜索、工作流、审计通知和字典开关等按需选修能力，强调先有最小实现再考虑组件。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+    <style>text{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.subtitle{font-size:17px;fill:#334155}.head{font-size:21px;font-weight:700}.body{font-size:17px}.small{font-size:16px;fill:#334155}.line{fill:none;stroke:#334155;stroke-width:2.3}</style>
+  </defs>
+  <rect width="960" height="650" fill="#f8fafc"/>
+  <text x="40" y="46" class="title">后端功能地图：先问需求，不从组件清单开始</text>
+  <text x="40" y="79" class="subtitle">最小主线：Java 17 · Spring Boot 3.x · MySQL（本地第一课 H2）</text>
+  <rect x="285" y="106" width="390" height="92" rx="14" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="480" y="141" text-anchor="middle" class="head">单体 task-api · 8080 /api/tasks</text>
+  <text x="480" y="172" text-anchor="middle" class="body">先完成任务 CRUD、事务与测试</text>
+  <path d="M480 198 V225 H135 V257" class="line" marker-end="url(#arrow)"/>
+  <path d="M480 225 H365 V257" class="line" marker-end="url(#arrow)"/>
+  <path d="M480 225 H595 V257" class="line" marker-end="url(#arrow)"/>
+  <path d="M480 225 H825 V257" class="line" marker-end="url(#arrow)"/>
+  <rect x="40" y="260" width="190" height="154" rx="12" fill="#ecfdf5" stroke="#047857" stroke-width="2"/>
+  <text x="58" y="294" class="head">同事一起协作</text>
+  <text x="58" y="328" class="body">认证 → 数据范围</text>
+  <text x="58" y="356" class="body">角色 → 属性 → 租户</text>
+  <text x="58" y="389" class="small">边界：不能跨人/团队</text>
+  <rect x="270" y="260" width="190" height="154" rx="12" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="288" y="294" class="head">任务需要附件</text>
+  <text x="288" y="328" class="body">小文件 → 私有存储</text>
+  <text x="288" y="356" class="body">直传 → 分片 / CDN</text>
+  <text x="288" y="389" class="small">边界：字节也要鉴权</text>
+  <rect x="500" y="260" width="190" height="154" rx="12" fill="#fff7ed" stroke="#b45309" stroke-width="2"/>
+  <text x="518" y="294" class="head">导入和自动报表</text>
+  <text x="518" y="328" class="body">小批 → 持久作业</text>
+  <text x="518" y="356" class="body">手工 → 定时调度</text>
+  <text x="518" y="389" class="small">边界：可恢复、可去重</text>
+  <rect x="730" y="260" width="190" height="154" rx="12" fill="#f5f3ff" stroke="#6d28d9" stroke-width="2"/>
+  <text x="748" y="294" class="head">支付开通团队版</text>
+  <text x="748" y="328" class="body">订单 → 官方回调</text>
+  <text x="748" y="356" class="body">验签 → 幂等 → 对账</text>
+  <text x="748" y="389" class="small">边界：不信前端成功页</text>
+  <rect x="40" y="450" width="880" height="150" rx="14" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+  <text x="60" y="482" class="head">其它能力按证据引入，不需要一次装齐</text>
+  <text x="60" y="520" class="body">搜索：SQL → 全文检索</text>
+  <text x="500" y="520" class="body">流程：状态转换 → 多步协作</text>
+  <text x="60" y="554" class="body">审计 / 脱敏 / 站内信 / 短信 / 邮件</text>
+  <text x="500" y="554" class="body">字典 / 运行配置 / Feature Flag</text>
+  <text x="40" y="630" class="small">每次升级都回答：为何需要？何时不用？失败后谁负责恢复？</text>
+</svg>

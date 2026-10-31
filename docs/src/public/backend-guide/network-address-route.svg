@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-labelledby="title desc">
+  <title id="title">任务请求经过局域网、NAT 和公网到达服务端</title>
+  <desc id="desc">浏览器使用私有地址和临时端口发起连接。家庭路由器选择下一跳，并把源地址和端口转换为公网映射。服务端监听8080，返回数据通过已有映射回到客户端。本机localhost流量不经过家庭路由器。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9 Z" fill="#164e63"/></marker>
+  </defs>
+  <rect width="960" height="520" rx="16" fill="#f8fafc"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#0f172a">
+    <text x="40" y="48" font-size="27" font-weight="700">一次任务请求：地址、路由与 NAT</text>
+    <text x="40" y="82" font-size="18" fill="#334155">示例地址仅用于讲解；实际路径还可能包含云网络和代理。</text>
+    <rect x="40" y="140" width="210" height="170" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="145" y="174" text-anchor="middle" font-size="22" font-weight="700">客户端</text>
+    <text x="145" y="207" text-anchor="middle" font-size="18">192.168.1.20</text>
+    <text x="145" y="237" text-anchor="middle" font-size="18">临时端口 53124</text>
+    <text x="145" y="276" text-anchor="middle" font-size="18">GET /api/tasks</text>
+    <rect x="374" y="140" width="210" height="170" rx="12" fill="#fef3c7" stroke="#92400e" stroke-width="2"/>
+    <text x="479" y="174" text-anchor="middle" font-size="22" font-weight="700">家庭路由器</text>
+    <text x="479" y="207" text-anchor="middle" font-size="18">选择下一跳</text>
+    <text x="479" y="237" text-anchor="middle" font-size="18">转换源地址与端口</text>
+    <text x="479" y="276" text-anchor="middle" font-size="17">198.51.100.25:62000</text>
+    <rect x="708" y="140" width="212" height="170" rx="12" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
+    <text x="814" y="174" text-anchor="middle" font-size="22" font-weight="700">服务端</text>
+    <text x="814" y="207" text-anchor="middle" font-size="18">203.0.113.10</text>
+    <text x="814" y="237" text-anchor="middle" font-size="18">监听端口 8080</text>
+    <text x="814" y="276" text-anchor="middle" font-size="18">task-api</text>
+    <path d="M252 222 H370" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="312" y="199" text-anchor="middle" font-size="18">局域网</text>
+    <path d="M586 222 H704" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="646" y="199" text-anchor="middle" font-size="18">公网</text>
+    <path d="M814 313 V352 H145 V313" fill="none" stroke="#164e63" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="479" y="387" text-anchor="middle" font-size="19">返回包通过已有 NAT 映射，回到客户端临时端口</text>
+    <rect x="40" y="422" width="880" height="66" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+    <text x="60" y="448" font-size="18" font-weight="600">localhost 是“当前网络环境里的自己”，不指向远端服务器。</text>
+    <text x="60" y="474" font-size="18">NAT 不会自动把本机 8080 发布到公网；访问仍受路由和安全策略限制。</text>
+  </g>
+</svg>
