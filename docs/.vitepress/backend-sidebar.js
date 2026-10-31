@@ -19,7 +19,7 @@ export const backendGuideSidebar = [
     items: [
       page("学习地图：从这里开始", "index"),
       page("学习节奏与检查点", "93-learning-path"),
-      page("150 条场景术语", "90-glossary"),
+      page("170 条场景术语", "90-glossary"),
     ],
   },
   {
@@ -31,7 +31,8 @@ export const backendGuideSidebar = [
       page("A3. IP、端口、DNS、TCP 与 TLS", "22-networking-for-backend"),
       page("A4. HTTP、Cookie、CORS 与缓存", "22a-http-and-browser"),
       page("A5. 代理、网关与服务发现", "22b-proxy-and-discovery"),
-      page("A6. 请求进入 Spring 之后", "03-request-lifecycle"),
+      page("A6. 内网、堡垒机与访问权限", "22c-private-network-and-access"),
+      page("A7. 请求进入 Spring 之后", "03-request-lifecycle"),
     ],
   },
   {

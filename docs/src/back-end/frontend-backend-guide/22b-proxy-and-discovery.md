@@ -3,8 +3,8 @@ prev:
   text: "A4. HTTP、Cookie、CORS 与缓存"
   link: "/back-end/frontend-backend-guide/22a-http-and-browser"
 next:
-  text: "A6. 请求进入 Spring 之后"
-  link: "/back-end/frontend-backend-guide/03-request-lifecycle"
+  text: "A6. 内网、堡垒机与访问权限"
+  link: "/back-end/frontend-backend-guide/22c-private-network-and-access"
 ---
 
 # 22b. 代理与服务发现：请求中间经过了谁
@@ -254,4 +254,4 @@ curl --max-time 10 -i https://your-test-host.example/api/tasks
 
 ## 主线衔接
 
-至此，[网络入门](/back-end/frontend-backend-guide/22-networking-for-backend) 解释送达，[HTTP 与浏览器](/back-end/frontend-backend-guide/22a-http-and-browser) 解释消息，本篇解释中间层。下一步进入 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice)，把单体任务服务和 MySQL 的部署边界落实到容器网络；回头遇到事故时再结合 [排查方法论](/back-end/frontend-backend-guide/27-troubleshooting-methodology) 按证据定位。
+至此，[网络入门](/back-end/frontend-backend-guide/22-networking-for-backend) 解释送达，[HTTP 与浏览器](/back-end/frontend-backend-guide/22a-http-and-browser) 解释消息，本篇解释中间层。主线下一篇 [公司内网与堡垒机](/back-end/frontend-backend-guide/22c-private-network-and-access) 切到另一条路径：工程师怎样获准进入服务器、查日志和连库，而不是用户怎样调用 API。学到部署阶段再用 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice) 落实容器网络；遇到事故时结合 [排查方法论](/back-end/frontend-backend-guide/27-troubleshooting-methodology) 按证据定位。

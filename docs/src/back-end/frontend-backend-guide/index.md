@@ -16,7 +16,7 @@ next:
 - **第一次来**：从下面的阶段 A 开始，按表内顺序走。文件名里的旧编号只是稳定地址，**不是阅读顺序**。
 - **同事说了个听不懂的词**：先查 [场景术语词典](./90-glossary)，想知道为什么需要它，再看 [后端功能地图](./39-backend-feature-map)。
 - **想马上动手**：直接做 [第一个可运行的任务 API](./07-build-a-crud-api)，卡在哪里再补前置，不必等全部读完。
-- **已经在联调故障**：从 [请求链路](./03-request-lifecycle) 和 [日志与排错](./26-reading-logs) 开始。
+- **已经在联调故障**：从 [请求链路](./03-request-lifecycle) 和 [日志与排错](./26-reading-logs) 开始；如果卡在「连 VPN、上堡垒机、申请连库」，先读 [公司内网与访问权限](./22c-private-network-and-access)。
 
 ![从网络到上线的后端学习路线，每阶段都有一个可验收的产物](/backend-guide/core-learning-map.svg)
 
@@ -42,7 +42,8 @@ next:
 | A3 | [网络：IP、端口、DNS、TCP、TLS](./22-networking-for-backend) | 解释 localhost / 0.0.0.0，分清解析失败与连接失败 |
 | A4 | [HTTP 与浏览器：报文、CORS、Cookie、缓存](./22a-http-and-browser) | 读懂请求响应，解释 curl 通但浏览器失败 |
 | A5 | [代理、网关、负载均衡与服务发现](./22b-proxy-and-discovery) | 说清 Nginx、CDN、网关各站在哪一跳 |
-| A6 | [请求进入 Spring 之后](./03-request-lifecycle) | 从入口跟到 SQL，知道异常和超时在哪产生 |
+| A6 | [公司内网、堡垒机、跳板机与访问权限](./22c-private-network-and-access) | 分清 VPN、连接中转、资产授权与系统 / 数据库权限 |
+| A7 | [请求进入 Spring 之后](./03-request-lifecycle) | 从入口跟到 SQL，知道异常和超时在哪产生 |
 
 **过关产物**：自己画出「点击新增任务 → 数据库提交 → 页面显示结果」的图，并标出 DNS、HTTP、进程和数据的位置。
 

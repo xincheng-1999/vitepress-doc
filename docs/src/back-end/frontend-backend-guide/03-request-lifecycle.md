@@ -1,7 +1,7 @@
 ---
 prev:
-  text: "A5. 代理、网关与服务发现"
-  link: "/back-end/frontend-backend-guide/22b-proxy-and-discovery"
+  text: "A6. 内网、堡垒机与访问权限"
+  link: "/back-end/frontend-backend-guide/22c-private-network-and-access"
 next:
   text: "B1. Java 最小知识集"
   link: "/back-end/frontend-backend-guide/05-java-crash-course"

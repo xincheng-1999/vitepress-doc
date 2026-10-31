@@ -1,6 +1,6 @@
 ---
 prev:
-  text: "A6. 请求进入 Spring 之后"
+  text: "A7. 请求进入 Spring 之后"
   link: "/back-end/frontend-backend-guide/03-request-lifecycle"
 next:
   text: "B2. Spring、Bean 与注入"

@@ -11,7 +11,8 @@
 - [想马上跑一个接口](/back-end/frontend-backend-guide/07-build-a-crud-api)
 - [先补网络基础](/back-end/frontend-backend-guide/22-networking-for-backend)
 - [听懂同事：后端功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)
-- [查一个词：150 条场景词典](/back-end/frontend-backend-guide/90-glossary)
+- [公司内网怎么进：堡垒机、跳板机与 VPN](/back-end/frontend-backend-guide/22c-private-network-and-access)
+- [查一个词：170 条场景词典](/back-end/frontend-backend-guide/90-glossary)
 - [时间怎么安排](/back-end/frontend-backend-guide/93-learning-path)
 
 ## 按需查阅，不是另外两条必修路线

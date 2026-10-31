@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="680" viewBox="0 0 960 680" role="img" aria-labelledby="title desc">
+  <title id="title">经跳板建立到应用机的 SSH 本地端口转发</title>
+  <desc id="desc">获批场景中，本机仅在回环地址 127.0.0.1 的 13306 端口监听。通过跳板机转运的是到应用机的 SSH 连接，应用机才解析并连接 MySQL 内网地址的 3306。SSH 加密覆盖到应用机；应用机至数据库的流量仍需单独的 TLS、网络放行与数据库权限。私钥无需复制到跳板，不默认开启 Agent 转发。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#475569"/></marker>
+    <style>text{font-family:"PingFang SC","Microsoft YaHei",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.head{font-size:21px;font-weight:700}.body{font-size:17px}.small{font-size:16px;fill:#334155}.arrow{fill:none;stroke:#475569;stroke-width:2.5}</style>
+  </defs>
+  <rect width="960" height="680" rx="18" fill="#f8fafc"/>
+  <text x="40" y="48" class="title">本地数据库端口，经批准的 SSH 通道访问内网</text>
+  <text x="40" y="82" class="body">只解释获批转发的链路；平台禁止转发时，使用公司正式数据库接入方案。</text>
+  <rect x="40" y="150" width="230" height="142" rx="12" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="60" y="188" class="head">你的电脑</text>
+  <text x="60" y="221" class="body">客户端连接回环地址</text>
+  <text x="60" y="255" class="body">127.0.0.1:13306</text>
+  <path d="M271 220 H356" class="arrow" marker-end="url(#arrow)"/>
+  <text x="284" y="202" class="small">中转</text>
+  <rect x="360" y="150" width="190" height="142" rx="12" fill="#ffffff" stroke="#64748b"/>
+  <text x="380" y="188" class="head">跳板机</text>
+  <text x="380" y="221" class="body">jump.example</text>
+  <text x="380" y="255" class="body">受控 TCP 转运</text>
+  <path d="M551 220 H646" class="arrow" marker-end="url(#arrow)"/>
+  <text x="570" y="202" class="small">到目标</text>
+  <rect x="650" y="150" width="270" height="142" rx="12" fill="#ecfdf5" stroke="#059669"/>
+  <text x="670" y="188" class="head">应用机（SSH 目标）</text>
+  <text x="670" y="221" class="body">app.internal.example</text>
+  <text x="670" y="255" class="body">在此发起数据库连接</text>
+  <path d="M70 316 V336 H890 V316" fill="none" stroke="#059669" stroke-width="2"/>
+  <text x="480" y="367" text-anchor="middle" class="body">到应用机的 SSH 加密会话经跳板传递；不需要把私钥复制到跳板。</text>
+  <path d="M785 294 V438" class="arrow" marker-end="url(#arrow)"/>
+  <text x="580" y="408" class="small">此后另走数据库协议</text>
+  <rect x="650" y="444" width="270" height="108" rx="12" fill="#fff7ed" stroke="#d97706"/>
+  <text x="670" y="482" class="head">内网 MySQL</text>
+  <text x="670" y="516" class="body">mysql.internal.example:3306</text>
+  <rect x="40" y="414" width="500" height="138" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="60" y="452" class="head">隧道建立，不等于数据库已经可用</text>
+  <text x="60" y="488" class="body">仍需：应用机的 DNS / 路由 / 端口放行，</text>
+  <text x="60" y="521" class="body">数据库 TLS 校验、用户认证和库表权限。</text>
+  <text x="40" y="604" class="body">只监听本机回环，不改成 0.0.0.0 给他人共享；不默认开启 Agent 转发。</text>
+  <text x="40" y="640" class="body">SSH 不会自动加密“应用机 → MySQL”这一跳，更不会代替审批和审计。</text>
+</svg>

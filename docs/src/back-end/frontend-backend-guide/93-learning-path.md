@@ -26,7 +26,7 @@ next: false
 
 ## 2. 如果只想先听懂同事
 
-先读 [系统地图](./02-architecture-overview)、[请求链路](./03-request-lifecycle)、[网络三篇起点](./22-networking-for-backend)、[功能地图](./39-backend-feature-map)，遇词查 [150 条场景词典](./90-glossary)。
+先读 [系统地图](./02-architecture-overview)、[网络系列起点](./22-networking-for-backend)、[公司内网与堡垒机](./22c-private-network-and-access)、[请求链路](./03-request-lifecycle)、[功能地图](./39-backend-feature-map)，遇词查 [170 条场景词典](./90-glossary)。
 
 到会议里不要只问「这个词是什么意思」，还问：
 
@@ -43,6 +43,7 @@ next: false
 | --- | --- | --- |
 | 命令启动就失败 | [JDK / Maven](./05-java-crash-course)、错误最末端原因 | 同时改 Java、框架和所有依赖版本 |
 | 不知道请求到没到应用 | [网络](./22-networking-for-backend)、[日志](./26-reading-logs) | 先把所有超时调成无限大 |
+| VPN 连上仍进不了服务器 / 数据库 | [内网、堡垒机与分层权限](./22c-private-network-and-access) | 关闭防火墙、开放所有来源或绕过审计 |
 | 看不懂类之间为什么自动连接 | [Bean 与构造器注入](./06-spring-boot-ioc-di) | 背完全部 Spring 注解再回来 |
 | SQL 不知道怎么写 | [数据模型与 SQL](./10-sql-and-indexes) | 只让 AI 生成 Entity，忽略表和约束 |
 | 登录后仍可访问别人数据 | [动作与归属授权](./32-security) | 只在前端藏按钮 |

@@ -220,6 +220,31 @@ next: false
 | 假设验证 / 根因分析 | 用证据淘汰假设并分析机制的排查方法 | 避免看到慢就加内存、看到错就重启 | 时间先后、日志相关性不自动证明因果 | [排查方法](/back-end/frontend-backend-guide/27-troubleshooting-methodology) |
 | Runbook | 常见故障的诊断、处置与恢复手册 | 减少临场试错并明确安全操作 | 不是只有命令列表；应写前提、风险、验证与回退 | [排查手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook) |
 
+## L. 进入公司内网：运维接入与权限
+
+| 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
+| --- | --- | --- | --- | --- |
+| 公网与内网 | 公网面向互联网路由，内网通常指组织控制的私有网络及访问范围 | 判断办公电脑访问生产主机应走公网入口还是受控内网通道 | 私有 IP 不代表可跨网络直达；内网也可能被入侵，不能省略认证、授权与加密 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| VPC | 云上由租户配置地址、路由与访问策略的逻辑私有网络 | 隔离测试与生产网络，并规划应用、数据库的连接边界 | 同一 VPC 不代表所有端口互通；跨 VPC 还需连接、路由和安全策略，不是绝对安全隔离保证 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 子网与路由表 | 子网划分地址范围，路由表决定匹配目的地址的流量下一跳 | 排查 VPN 后只通部分网段、请求能出去但回程走错的问题 | 有路由不等于获准访问；还要检查回程、地址重叠及两端过滤策略 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| VPN | 在端点或网络之间建立受保护隧道的接入方式 | 让远程办公电脑按配置访问公司指定网段 | 连上只说明隧道建立，不代表全内网授权；分流路由、DNS、资源策略与目标账号仍独立生效 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 零信任接入ZTNA | 按身份、设备状态等策略向特定资源开放访问的接入模式 | 给员工或外包按需开放某个内部应用，而非整个网段 | 不是装上客户端就永远可信；策略校验频率与协议覆盖看实现，也不替代应用内授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 跳板机Jump Host | 用作访问其他主机中转点的主机 | 通过受控入口以 SSH ProxyJump 等方式连接没有公网入口的生产主机 | 能中转不等于自带审批、凭据托管或完整录像；目标主机仍须验证身份并授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 堡垒机Bastion | 集中管理运维入口、资产访问与部分审计能力的系统；名称也可能仅指加固跳板主机 | 为生产登录统一身份、审批、目标账号授权和会话记录入口 | 登录堡垒机不等于有全部资产权限；审计受协议、接入路径和配置限制，旁路或未覆盖操作不会自动完整记录 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| PAM特权访问管理 | 管理高权限身份、凭据与特权会话生命周期的一组机制 | 为临时排障提供限时提权、凭据托管、轮换与回收 | 不只是密码保险箱；未接管的账号和旁路仍有风险，提权不能跳过审批或目标系统权限边界 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH | 提供加密传输、主机身份校验和用户认证的远程访问协议 | 安全登录 Linux 主机、执行命令或建立获准的转发连接 | SSH 认证成功不等于有 sudo 或数据库权限；端口可达也不代表主机可信，应校验主机身份 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 公钥与私钥 | 成对的非对称密钥；SSH 公钥认证中私钥用于签名，公钥用于验证 | 不共享登录密码，将个人公钥授权给指定主机账号 | 公钥可分发，私钥不能上传跳板机或提交仓库；密钥口令不替代权限回收，泄露后仍需撤销相关授权并换钥 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 主机指纹与known_hosts | 主机指纹标识主机公钥，known_hosts 保存已信任的主机密钥关联 | 首次连接核对服务器身份，并发现后续密钥异常变化 | 指纹变化可能是重装也可能是冒充；应从可信渠道核对，不能盲删记录或关闭校验来消除告警 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH Agent与Agent转发 | Agent 代为完成私钥签名，转发让远端通过转发通道请求本地 Agent 签名 | 减少重复输入密钥口令，并在必要的多跳操作中避免复制私钥 | 转发虽不直接复制私钥，受控远端仍可能借 Agent 冒用身份；默认不转发，单纯中转优先使用 ProxyJump | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH隧道与端口转发 | 通过 SSH 连接转送本地、远端端口或动态代理流量 | 经获准跳板访问仅内网可达的数据库，而不直接暴露数据库公网端口 | 隧道不替代数据库认证与授权；目标看到的是转发出口，监听地址过宽还会把访问能力暴露给别人 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 安全组 | 云平台绑定实例、网卡等资源的网络访问规则集合，具体作用范围依产品而定 | 只允许指定应用来源访问数据库端口，定位云侧拦截 | 不能假定各种云安全组都有相同有状态规则；入出方向、连接跟踪、规则合并及返回流量行为须查对应产品与配置 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 防火墙 | 在主机或网络边界按策略过滤流量的机制 | 云侧已放行但主机端口仍不可达时，检查主机或中间设备的阻断规则 | 放行一个防火墙不代表整条链路通；防火墙也不替代目标服务认证，不应为排障直接关闭全部防护 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 网络ACL | 在子网等网络边界按地址、协议、端口等条件允许或拒绝流量的规则列表 | 在网段边界限制访问，并排查安全组放行后仍被拦截的连接 | 规则顺序、有状态或无状态语义依产品而异；无状态规则需考虑回程端口，不能照搬安全组配置 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| IP白名单allowlist | 仅允许匹配指定 IP 或网段的来源访问的策略 | 为数据库或供应商接口限制公司获准的访问出口 | 应填目标实际看到的源 IP，未必是电脑内网 IP；共享出口不等于同一可信用户，仍需身份认证与最小授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| NAT与出口IP | NAT 转换报文地址等信息，出口 IP 是对端实际看到的来源地址 | 解释办公电脑或私有子网访问第三方时，为何应登记网关的出口地址 | 出口可能因多网关或故障切换变化；NAT 不等于身份校验，也不代表外部可以主动连入或内网天然安全 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| IAM | 管理身份、角色和访问策略的体系，云 IAM 常控制云资源管理及 API 操作 | 限制谁能查看主机、修改安全组或获取临时云凭据 | 有云控制台权限不等于能登录操作系统或查询数据库；只有明确集成时才联动，仍须区分各层账号与授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 运维审计与会话录像 | 记录运维身份、目标、时间、操作及受支持会话内容的追溯机制 | 复盘谁在何时进入生产、执行了什么，并关联变更与数据库日志 | 录像不保证覆盖旁路、所有协议或隧道内操作；还需验证采集范围、时间同步、防篡改、留存和敏感信息访问权限 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+
 ## 动手练习：把术语翻译成可验收的方案
 
 任选一条需求：“给我的任务加附件”“每天导出团队报表”或“任务完成后通知负责人”。用不超过十个术语写一页方案，每个术语必须说明：
@@ -250,6 +275,9 @@ next: false
 6. 延迟消息到期后就等于定时作业完成了吗？
 
    **答案**：不是。可见/投递、被认领、实际执行成功是不同阶段；调度还需漏跑、补跑、时区、并发与历史记录。
+7. VPN连上且堡垒机登录成功，为什么SSH/数据库仍拒绝？
+
+   **答案**：隧道与入口登录只通过了前两道检查，不等于目标资源授权。先区分超时、连接被拒绝和认证/授权失败，再按实际路径检查 DNS、双向路由、安全组/ACL/防火墙、目标监听与来源白名单；经跳板或隧道访问时要确认目标实际看到的源 IP。最后核对堡垒机资产授权、目标 SSH 账号与密钥、数据库账号与权限及所需 TLS，结合对应日志定位，不靠全网放行绕过边界。参见 [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access)。
 
 ## 相关教程
 
