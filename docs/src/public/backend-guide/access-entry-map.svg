@@ -1,60 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="800" viewBox="0 0 960 800" role="img" aria-labelledby="title desc">
-  <title id="title">业务访问与受控运维访问的两条路径</title>
-  <desc id="desc">业务用户经 HTTPS 入口调用应用，应用用服务身份连接数据库。工程师的运维访问是另一条受控路径：按公司方案接入网络或零信任入口，再经资产授权与堡垒机等工具访问服务器或数据库。网络可达、平台授权、系统认证与数据权限分别检查，产品不必全部串联使用。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="380" viewBox="0 0 960 380" role="img" aria-labelledby="title desc">
+  <title id="title">从家里登录公司测试服务器的常见过程</title>
+  <desc id="desc">先在家里的电脑上连接公司 VPN，接入公司允许访问的内部网络；再登录堡垒机，申请并选择测试服务器；最后建立远程连接，在服务器终端中查日志。连接中转可以由堡垒机本身或单独的跳板机承担，不必再登录另一套工具。图示是本章的常见流程，不要求所有公司采用同一种接入方式。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#475569"/></marker>
-    <style>text{font-family:"PingFang SC","Microsoft YaHei",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.section{font-size:22px;font-weight:700}.head{font-size:21px;font-weight:700}.body{font-size:17px}.small{font-size:16px;fill:#334155}.arrow{fill:none;stroke:#475569;stroke-width:2.5}</style>
+    <style>text{font-family:"PingFang SC","Microsoft YaHei",sans-serif;fill:#17263c}.title{font-size:28px;font-weight:700}.head{font-size:21px;font-weight:700}.body{font-size:17px}.arrow{fill:none;stroke:#475569;stroke-width:2.5}</style>
   </defs>
-  <rect width="960" height="800" rx="18" fill="#f8fafc"/>
-  <text x="40" y="48" class="title">业务入口与运维入口，是两条不同的路径</text>
-  <text x="40" y="82" class="body">能打开任务网页，不等于能 SSH 服务器；内网可达，也不等于已经获准操作。</text>
-  <text x="40" y="132" class="section">① 用户正常使用业务</text>
-  <rect x="40" y="155" width="200" height="96" rx="12" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="60" y="193" class="head">浏览器 / 客户端</text>
-  <text x="60" y="225" class="body">用户身份与会话</text>
-  <path d="M241 203 H266" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="270" y="155" width="200" height="96" rx="12" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="290" y="193" class="head">HTTPS 入口</text>
-  <text x="290" y="225" class="body">反向代理 / 路由</text>
-  <path d="M471 203 H496" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="500" y="155" width="200" height="96" rx="12" fill="#ecfdf5" stroke="#059669"/>
-  <text x="520" y="193" class="head">task-api</text>
-  <text x="520" y="225" class="body">业务规则与归属授权</text>
-  <path d="M701 203 H726" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="730" y="155" width="190" height="96" rx="12" fill="#fff7ed" stroke="#d97706"/>
-  <text x="750" y="193" class="head">数据库</text>
-  <text x="750" y="225" class="body">应用的服务身份</text>
-  <path d="M40 282 H920" stroke="#cbd5e1" stroke-dasharray="6 6"/>
-  <text x="40" y="326" class="section">② 工程师获批后进行运维</text>
-  <rect x="40" y="350" width="200" height="108" rx="12" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="60" y="387" class="head">受控设备</text>
-  <text x="60" y="419" class="body">实名账号 / MFA</text>
-  <path d="M241 404 H266" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="270" y="350" width="200" height="108" rx="12" fill="#eff6ff" stroke="#2563eb"/>
-  <text x="290" y="387" class="head">批准的接入入口</text>
-  <text x="290" y="419" class="body">VPN / ZTNA 等</text>
-  <path d="M471 404 H496" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="500" y="350" width="200" height="108" rx="12" fill="#ecfdf5" stroke="#059669"/>
-  <text x="520" y="387" class="head">堡垒机 / 访问平台</text>
-  <text x="520" y="419" class="body">资产授权 / 受控会话</text>
-  <path d="M701 404 H726" class="arrow" marker-end="url(#arrow)"/>
-  <rect x="730" y="350" width="190" height="108" rx="12" fill="#fff7ed" stroke="#d97706"/>
-  <text x="750" y="387" class="head">获批目标资产</text>
-  <text x="750" y="419" class="body">服务器 / 数据库</text>
-  <text x="40" y="496" class="small">这是组合示意：也可能走专线、云访问代理或平台直达；不要求所有产品串联。</text>
-  <text x="40" y="542" class="section">四道门：通过前一道，不代表后一道也通过</text>
-  <rect x="40" y="563" width="205" height="102" rx="12" fill="#ffffff" stroke="#94a3b8"/>
-  <text x="56" y="597" class="head">网络可达</text>
-  <text x="56" y="630" class="small">DNS / 路由 / 放行</text>
-  <rect x="265" y="563" width="205" height="102" rx="12" fill="#ffffff" stroke="#94a3b8"/>
-  <text x="281" y="597" class="head">平台资产授权</text>
-  <text x="281" y="630" class="small">环境 / 角色 / 时限</text>
-  <rect x="490" y="563" width="205" height="102" rx="12" fill="#ffffff" stroke="#94a3b8"/>
-  <text x="506" y="597" class="head">目标系统认证</text>
-  <text x="506" y="630" class="small">账号 / 密钥 / 证书</text>
-  <rect x="715" y="563" width="205" height="102" rx="12" fill="#ffffff" stroke="#94a3b8"/>
-  <text x="731" y="597" class="head">具体操作权限</text>
-  <text x="731" y="630" class="small">文件 / sudo / 库表</text>
-  <text x="40" y="714" class="body">跳板机主要提供受控中转；企业堡垒机通常再增加审批、凭据管理和操作审计。</text>
-  <text x="40" y="749" class="body">真实权限与审计覆盖取决于部署和配置；不能把“在内网”当成无限信任。</text>
+  <rect width="960" height="380" rx="18" fill="#f8fafc"/>
+  <text x="40" y="48" class="title">从家里连接测试服务器</text>
+  <text x="40" y="84" class="body">按本章的例子，从接入公司网络，到真正进入服务器。</text>
+  <rect x="40" y="135" width="170" height="115" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="60" y="177" class="head">你的电脑</text>
+  <text x="60" y="214" class="body">在家办公</text>
+  <path d="M211 192 H256" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="260" y="135" width="180" height="115" rx="12" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="278" y="177" class="head">① 连接 VPN</text>
+  <text x="278" y="214" class="body">接入公司内网</text>
+  <path d="M441 192 H486" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="490" y="135" width="200" height="115" rx="12" fill="#ecfdf5" stroke="#059669"/>
+  <text x="508" y="177" class="head">② 登录堡垒机</text>
+  <text x="508" y="214" class="body">申请并选择测试机</text>
+  <path d="M691 192 H736" class="arrow" marker-end="url(#arrow)"/>
+  <rect x="740" y="135" width="180" height="115" rx="12" fill="#fff7ed" stroke="#d97706"/>
+  <text x="758" y="177" class="head">③ 进入服务器</text>
+  <text x="758" y="214" class="body">打开终端查日志</text>
+  <text x="40" y="301" class="body">其中的连接中转，可由堡垒机本身或单独的跳板机完成。</text>
+  <text x="40" y="341" class="body">跳板机负责中转；堡垒机平台通常还会管理访问权限、记录操作。</text>
 </svg>

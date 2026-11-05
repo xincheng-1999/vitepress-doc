@@ -7,18 +7,17 @@ next:
   link: "/back-end/frontend-backend-guide/39-backend-feature-map"
 ---
 
-# 后端测试：把任务 API 的承诺变成证据
+# 后端测试：改了异常处理，怎样知道接口没被改坏
 
-> 场景：你把全局异常处理改得更“统一”，结果 405 和 415 都成了 500；页面还能创建任务，手工点几下却没发现回归。
-> 测试的价值不是证明“代码执行过”，而是守住接口结果、数据库副作用和安全边界。
+你把异常处理改成了统一格式，创建任务仍能成功，手工点几下看不出问题。可是不支持的 PATCH 和错误的 Content-Type，现在都返回 500。正常页面没走这些请求，回归就漏掉了。
 
-前置：[CRUD 实验](/back-end/frontend-backend-guide/07-build-a-crud-api)、[接口契约](/back-end/frontend-backend-guide/34-api-design)。主线源码位于仓库根目录 `examples/backend-task-api`，测试类为 `src/test/java/dev/learning/tasks/TaskApiTest.java`。
+我们从工程里已有的测试看起：它们怎样发请求，怎样判断结果，以及什么时候还需要查数据库。然后再分清，初版的 7 个 CRUD 测试、Session 变体的 16 个安全测试，各自覆盖哪一套应用。
 
-**学完能做什么：**运行并读懂现有 7 个测试方法，解释它们测到和没测到什么，再为 MySQL、权限和并发设计下一批验收用例。维护时已实际通过这 7 个测试及可执行构建；下面给出可复现命令，你仍应在自己的环境运行。Session 变体的 16 个安全测试与覆盖边界见 [登录实验](./32a-session-login-lab)。
+前置是 [CRUD 实验](/back-end/frontend-backend-guide/07-build-a-crud-api) 和 [接口契约](/back-end/frontend-backend-guide/34-api-design)。先使用仓库的 `examples/backend-task-api`，对应测试类是 `src/test/java/dev/learning/tasks/TaskApiTest.java`；[登录实验](./32a-session-login-lab) 是另一个独立工程，不把两套源码和测试数混在一起。
 
-## 1. 先运行真实已有的测试
+## 1. 先运行测试，不需要提前启动服务
 
-前提是 JDK 17、Maven 3.6.3+；第一次解析依赖需要联网。从仓库根目录进入示例：
+准备 JDK 17、Maven 3.6.3+。首次解析依赖需要联网，从仓库根目录执行：
 
 ```bash
 cd examples/backend-task-api
@@ -28,36 +27,77 @@ mvn test -Dtest=TaskApiTest
 mvn test '-Dtest=TaskApiTest#protocolErrorsKeepTheirStatus'
 ```
 
-测试导入手工创建的随机 H2 内存 DataSource，不绑定外部 datasource / Hikari 属性；test profile 固定，并关闭自动 SQL 初始化。执行本项目 schema 和每次清理前，都核验 JDBC 元数据必须等于本次随机 `jdbc:h2:mem:...`。不满足即失败，避免读者环境把初始化或 DELETE 指向外部库。仍不要主动改写隔离配置，**测试绝不能指向生产或共享业务库**。
-
-预期报告示意，不是本次编辑的执行结果：
+完整初版工程应得到类似结果，下面是预期形态，不是本次运行记录：
 
 ```text
 Tests run: 7, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-7 是当前 `@Test` 方法数，不是只有 7 个请求；几个方法在内部循环测试多种输入。`Failures` 表示断言失败，`Errors` 常表示未预期异常或测试上下文失败。出现错误先看第一个有效原因，不要直接删断言或跳过测试。
+这里的 7 指 `@Test` 方法数。有的方法循环发出多种非法请求，所以请求数量远大于 7。Failures 是断言失败，Errors 常见于未预期异常或上下文启动失败；先找第一个有效原因，不通过删断言、跳过测试把报告变绿。
 
-## 2. 现有 7 个测试分别保护什么
+测试会创建和清理数据，因此先确认隔离机制。工程固定 test profile，关闭自动 SQL 初始化，再手工创建随机命名的内存 H2 DataSource，**不绑定外部 datasource 或 Hikari 属性**。初始化 schema 和每次 DELETE 前，还检查 JDBC metadata URL 必须精确等于本次随机的 `jdbc:h2:mem:...`。不符合就停止，防止环境配置把清理语句指向外部库。不要移除这些保护，测试也绝不连接生产或共享业务库。
 
-| 真实方法名 | 现有断言覆盖的行为 |
+## 2. 先看一条会发现这次回归的测试
+
+单独运行的 `protocolErrorsKeepTheirStatus` 如下：
+
+```java
+@Test void protocolErrorsKeepTheirStatus() throws Exception {
+    mvc.perform(patch("/api/tasks/missing"))
+        .andExpect(status().isMethodNotAllowed())
+        .andExpect(header().exists("Allow"));
+    mvc.perform(post("/api/tasks")
+        .contentType(MediaType.TEXT_PLAIN).content("x"))
+        .andExpect(status().isUnsupportedMediaType());
+    mvc.perform(get("/no-such-route"))
+        .andExpect(status().isNotFound());
+}
+```
+
+`perform` 构造请求并交给应用，`andExpect` 检查返回结果。第一个请求故意使用未支持的 PATCH，应该是 405，还要保留 Allow；第二个发送 text/plain，应该是 415；第三个找不存在的路由，应该是 404。
+
+如果统一异常处理把它们都改成 500，这些断言就会失败。测试关注的是调用方能看到的协议行为，而不是只检查某个异常处理方法有没有被调用。这也是先写清接口契约的价值：结果应该怎样，不靠测试运行时临时猜。
+
+## 3. 状态码对了，还要看有没有错误副作用
+
+再看删除的一小段：
+
+```java
+mvc.perform(delete("/api/tasks/{id}", id))
+    .andExpect(status().isNoContent())
+    .andExpect(content().string(""));
+```
+
+204 表示无正文，单查状态还不够，因此同时检查响应体为空。客户端也就不应对这次响应再调用 `response.json()`。
+
+非法创建同理。返回 400 之后，还要查表里是否真的没增加任务；非法更新之后，要重新读原任务，确认标题没有被清空。否则一种错误实现可能“先写库、后发现错误”，响应看上去拒绝了，数据却已经变了。
+
+初版的 `invalidTitleNeverWrites` 就检查了这点，包括 EM SPACE 等 Unicode 空白。标题先经过 strip，业务层仍要拒绝归一化后为空的值。另一个用例保存看似 SQL 注入的标题，要求返回同样文本、表仍然存在且只有一条记录，检查参数确实被当作数据。
+
+这类用例保护的是具体路径，并非完整安全审计。未来增加动态排序或其他 SQL 时，仍要对新入口检查和补测。
+
+## 4. 已有七个方法，可以怎样读
+
+先理解上面的请求与副作用，再用这张表查完整范围，不必一次背下所有方法名：
+
+| 方法 | 检查的行为 |
 | --- | --- |
-| `createReadListUpdateDelete` | 创建 201、Location 与请求 ID 头、默认 TODO；查询、分页、PUT DONE；DELETE 204 空正文、重复删除 204、删除后 GET 404 |
-| `invalidTitleNeverWrites` | 空串、ASCII / Unicode 全空白、101 长度标题返回 400；错误有 requestId；非法创建不新增任务，Unicode 空白更新不改变原值 |
-| `malformedJsonAndInvalidEnumAre400` | 标题数字、布尔、null、缺失、数组，以及坏 JSON 返回 400；非法状态字符串和数字枚举返回 400 |
-| `pageBoundariesAreEnforced` | size 为 0 / 101、page 为 -1 / 10001 / 非数字时返回 400 |
-| `missingUpdateIs404` | 格式合法的 PUT 更新不存在任务返回 404 |
-| `protocolErrorsKeepTheirStatus` | PATCH 返回 405 并保留 Allow，text/plain 创建返回 415，不存在的路径返回 404 |
-| `sqlParametersDoNotBecomeSql` | 类似 SQL 注入的标题按普通文本保存，响应标题不变，任务表仍在且有一条记录 |
+| `createReadListUpdateDelete` | 创建 201、Location 和请求 ID、默认 TODO；读取、分页、PUT DONE；删除 204 空正文、重复删除 204、删除后查询 404 |
+| `invalidTitleNeverWrites` | 空串、ASCII 与 Unicode 空白、101 长度标题为 400；错误有 requestId；创建不写入，非法更新不改原值 |
+| `malformedJsonAndInvalidEnumAre400` | 数字、布尔、null、缺失、数组标题与坏 JSON 被拒绝；非法状态字符串和数字枚举为 400 |
+| `pageBoundariesAreEnforced` | size 为 0、101，page 为 -1、10001 或非数字时为 400 |
+| `missingUpdateIs404` | 合法格式更新不存在任务为 404 |
+| `protocolErrorsKeepTheirStatus` | 405 保留 Allow，错误媒体类型 415，未知路径 404 |
+| `sqlParametersDoNotBecomeSql` | 注入样式标题原样保存，任务表仍在且记录数为 1 |
 
-标题类型和数字枚举之所以被拒绝，还依赖主线 `JsonConfig` 的严格反序列化配置，**不是 String、enum 或校验注解天然保证**。测试把这项契约固定下来，避免框架默认转换悄悄改变输入含义。
+严格拒绝数字标题和数字枚举，还依赖工程的 `JsonConfig` 反序列化配置。String、enum 或校验注解本身未必给出相同结果，测试能避免框架默认转换悄悄改变这项约定。
 
-上述 SQL 用例是一条回归证据，不是完整安全审计；它不能证明所有未来查询、排序字段和动态 SQL 都没有注入风险。
+## 5. 请求到底经过了哪些真实代码
 
-## 3. 看懂装配：不是“把 HTTP 全 mock 掉”
+这些请求由 MockMvc 发出，没有在测试里启动网络端口，但它们会进入应用的 Web 处理流程。Controller、Service、Repository、JSON 配置和异常处理都参与，Service 与 Repository 没有被替换成预设答案的 mock。
 
-源码的测试骨架如下，完整 imports 和全部方法在示例工程内：
+测试骨架如下，完整 imports 和配置在工程内：
 
 ```java
 @SpringBootTest(properties = {
@@ -84,90 +124,46 @@ class TaskApiTest {
 }
 ```
 
-- `@SpringBootTest` 加载完整应用上下文；Controller、Service、Repository、JSON 配置和异常处理都真实参与。
-- `@AutoConfigureMockMvc` 提供 MockMvc，经模拟的 Servlet 请求调用应用；当前没有替换 Service 或 Repository 的 mock。
-- 默认测试不启动真实网络监听端口，所以不要求先启动 Tomcat，也**测不到** DNS、TCP、TLS、Nginx 或浏览器 CORS 执行结果。
-- H2 是真正执行 SQL 的嵌入式数据库，不是“伪造了所有 SQL 返回值”的替身，但它不是生产 MySQL。
-- `@BeforeEach` 在每个方法前清空测试表。现有用例依赖隔离数据库，不应依赖测试顺序或默认假设并行运行也安全。
+`@SpringBootTest` 加载应用上下文，`@AutoConfigureMockMvc` 提供模拟的 Servlet 请求入口。H2 真正执行 SQL，不是伪造数据库返回值。`@BeforeEach` 每个方法前清表，保证方法不用依赖上一条测试留下的记录；现有隔离方式也不能默认支持任意并行运行。
 
-## 4. 一条断言只证明一件具体的事
+因为不走网络，它们验证不了 DNS、TCP、TLS、Nginx 和浏览器 CORS。H2 的行为也不能代表生产 MySQL。通过这组测试，只说明列出的规则在这套 Spring 加 H2 的环境里符合预期。
 
-下面节选自现有 `protocolErrorsKeepTheirStatus`：
+## 6. 增加保护时，给对应工程补测试
 
-```java
-@Test void protocolErrorsKeepTheirStatus() throws Exception {
-    mvc.perform(patch("/api/tasks/missing"))
-        .andExpect(status().isMethodNotAllowed())
-        .andExpect(header().exists("Allow"));
-    mvc.perform(post("/api/tasks")
-        .contentType(MediaType.TEXT_PLAIN).content("x"))
-        .andExpect(status().isUnsupportedMediaType());
-    mvc.perform(get("/no-such-route"))
-        .andExpect(status().isNotFound());
-}
-```
+初版任务 API 没有 owner_id、登录或用户隔离，任何调用者都能操作所有任务，不能直接公网部署。它的七个测试不包含“越权保护成功”。
 
-`perform` 准备并发送请求，`andExpect` 检查可观察结果；这和前端用测试工具“发请求、断言响应”的思路相通。400 / 405 / 415 不是可以随便统一的失败，它们分别告诉调用方不同的修正方向。
+[安全设计](/back-end/frontend-backend-guide/32-security) 后面的独立 Session 实验已经提供了另一套实现和 **16 个安全测试方法**。它们真实取 CSRF token、提交表单登录，再验证会话轮换、旧 token 失效、未登录 JSON 401、越权读写删 404、分页 items 与 total 隔离、伪造 uid 和 owner 无效，以及退出后旧会话失效。
 
-另一个例子来自删除流程：
+读这些用例时仍按同一个问题推进：请求为什么应失败，失败之后什么不能变化。例如 A 带合法 CSRF token 修改 B 的任务，应拒绝并检查 B 数据没变；漏 token 的变更与退出，都不能产生副作用。两工程都保留随机内存数据源和清理前 URL 校验，不把安全变体的测试直接塞回初版再指望自动通过。
 
-```java
-mvc.perform(delete("/api/tasks/{id}", id))
-    .andExpect(status().isNoContent())
-    .andExpect(content().string(""));
-```
+将来补请求幂等键、版本冲突或复杂状态流转，再补相应场景。重复 DELETE 的测试通过，只能说明这一个删除行为，不说明所有写操作都可以随意重试。跨源时也要分别测服务端响应头、真实请求权限，再在浏览器验证读取限制。
 
-只断言 204 不足以验证“无正文”；也不要在客户端对 204 调 `response.json()`。同样，“非法标题返回 400”之外再查数据库为 0，才进一步证明没有意外写入。
+## 7. 迁到 MySQL 后，增加真实数据库的验证
 
-## 5. 单元、切片、集成、端到端怎样分工
+H2 降低启动门槛，但 MySQL 的约束、锁和时间处理都需要在目标版本实测。可以用独立临时 MySQL 库，或额外接入 Testcontainers；后者需要新测试依赖与 Docker，不是当前默认七个测试的一部分。
 
-| 层次 | 想验证什么 | 测不到什么 |
-| --- | --- | --- |
-| 普通 JUnit 单元测试 | 纯规则、状态转换、服务在指定依赖结果下的行为 | Spring 装配、真实 SQL、事务代理 |
-| MVC 切片，如 `@WebMvcTest` | 路由、绑定、序列化与 Web 相关配置 | 被替换掉的业务和数据库实现 |
-| 当前 Spring + H2 集成测试 | 多层接线和已列出的接口 / SQL 行为 | MySQL 实际差异、真实网络与浏览器 |
-| 专门的 MySQL 集成测试 | 目标数据库的约束、时间、查询、事务 | 公网入口、完整用户浏览器流程 |
-| 授权环境的端到端测试 | 浏览器或客户端经真实入口完成关键流程 | 所有内部边界组合与所有并发交错 |
+先验证建表、参数化 SQL 和实际约束：缺失、重复、越界数据是否正确拒绝；再检查中文、emoji、UTC 时间点与微秒精度往返。接着用多个真实连接制造提交、回滚、并发更新和锁等待，检查最后的数据，而不只检查有没有异常。
 
-JUnit 提供测试生命周期、断言等；Mockito 可构造依赖替身。替身能模拟“查询不存在”“下游抛错”，但只能按设定回答，不能证明 SQL 正确。也不是所有单元测试都必须 mock：纯函数通常直接测输入输出。
+迁移后还要重新检查 API 契约、分页排序和重启持久化。索引与性能使用有代表性的数据量另做测试，数据库容器能启动，不表示这些问题都已验证。
 
-用普通 `new TaskService(mockRepository)` 测规则时，Spring 事务代理不会因此启动，不能拿它证明事务回滚。MVC 切片也必须显式包含需要的配置，否则可能漏掉主线严格 JSON 配置。
+临时库使用独立账号和最小权限，生产凭据不进入 CI。`CREATE TABLE IF NOT EXISTS` 也不能代替版本化迁移与回滚方案的测试。
 
-没有固定“70% 单测”配额：按失败风险、反馈速度和维护成本选层次；不要让少量慢 E2E 替代所有边界验证，也不要只测 mock 调用次数而不检查结果。
+## 按需补充
 
-## 6. 从 H2 迁移 MySQL：需要新增什么证据
+### 什么时候用单元测试，什么时候用更完整的环境
 
-主线的 H2 先降低 CRUD 门槛，生产持久化方向是 MySQL。**H2 测试全绿不证明 MySQL 已被验证**，MySQL 也不因容器能启动就自动正确。
+纯粹的状态转换或计算规则，可以普通 JUnit 直接给输入看输出。需要模拟“查询不存在”或“下游失败”时，Mockito 可以提供依赖替身，但它只会按设定回答，无法检查真实 SQL。
 
-后续用独立临时 MySQL 库或 Testcontainers 增加集成测试；后者需要额外测试依赖及 Docker，不是当前默认 7 个测试的组成部分。至少覆盖：
+MVC 切片如 `@WebMvcTest` 适合路由、绑定和序列化，必须显式引入需要的配置，避免漏掉严格 JSON 规则。当前 Spring 加 H2 的集成测试，则把多层实现接在一起验证。需要 MySQL 约束与事务就上真实 MySQL；要检查浏览器经过真实入口完成登录，再做授权环境下的端到端测试。
 
-- 目标 MySQL 版本上的 DDL、参数化 SQL、CHECK 与其他实际约束，测试缺失 / 重复 / 越界数据。
-- `createdAt` 的微秒精度和 UTC 时间点往返、中文和 emoji，连接与会话时区配置。
-- 真正跨连接的提交、回滚、并发更新、死锁或锁等待；验证最终数据，不只看异常是否出现。
-- 数据迁移后的接口契约、分页排序和重启持久化；执行计划、索引与性能预算另作有代表性数据量的验证。
+普通 `new TaskService(mockRepository)` 不会经过 Spring 事务代理，不能用它证明回滚。没有固定的“70% 单测”配额，按风险、反馈速度和维护成本分配；少量端到端覆盖不了全部边界，测试数量或覆盖率高也不能代替有效断言。
 
-测试库使用独立账号与最小权限，临时数据可清理。不能把生产凭据复制给 CI；也不要把 `CREATE TABLE IF NOT EXISTS` 当成已经测试过的版本化迁移和回滚。
+### 接下来可以亲手补一个什么用例
 
-## 7. 未来的越权测试：现在没有，不要假装已经安全
+在实验副本中创建一条任务，GET `/api/tasks`，检查默认 page=0、size=20、total=1、items 数量为 1。新增独立 `@Test` 后，副本的总方法数应为 8，原工程仍以实际源码为准。
 
-当前任务没有 owner_id、登录或用户隔离，任何调用者都能操作所有任务；**现有测试不能证明任何资源归属保护，不可直接公网部署**。
+若要验证“MySQL 中同一幂等键并发只能创建一条”，先实现事务和唯一约束，再让真实多连接竞争；只 mock Repository 只能测局部分支。H2 全绿但浏览器跨域失败也不矛盾，它们走的环境不同，按 [网络与 HTTP](/back-end/frontend-backend-guide/22a-http-and-browser) 继续排查。
 
-接入 [安全设计](/back-end/frontend-backend-guide/32-security) 后，新增两名真实测试身份 A、B，并至少验证：
+以后需要把测试放入流水线时，再看 [CI/CD 与部署](/back-end/frontend-backend-guide/36-cicd-deployment)。每加一条规则，先回 [API 设计](/back-end/frontend-backend-guide/34-api-design) 明确预期，再选能真正触及这条规则的测试环境。
 
-1. 未认证请求按方案返回 401；不能通过伪造 uid 头或 body 的 ownerId 获得身份。
-2. A 查询列表只看到 A 的任务；直接猜测 B 的 ID，也不能读取、修改、删除 B 的资源。
-3. 越权写操作按契约返回 403 或隐藏存在性的 404，并验证 **B 的数据完全未变**；不只断言状态码。
-4. Cookie 认证时补 CSRF 正反用例；跨源场景分别测预检响应头与实际请求权限，浏览器端再验证读取限制。
-
-复杂工作流、请求幂等键、更新版本检查也都尚未实现。补齐后再增加相应测试，不能用“重复 DELETE 通过”宣称所有写操作都可安全重试。
-
-## 动手与参考答案
-
-1. **读测试**：运行 `mvn test`，再单独运行协议错误方法。预期完整类 7 个方法，单方法 1 个；当前报告若不同，先核对分支和源码，不要伪造输出。
-2. **补一个用例**：在实验副本中为默认分页增加断言。参考：先创建一条任务，GET `/api/tasks`，检查 page=0、size=20、total=1、items 数量为 1。新增独立 `@Test` 后总方法数应变为 8。
-3. **解释边界**：H2 测试通过，浏览器跨域请求仍失败，是否矛盾？参考：不矛盾，MockMvc 没有运行浏览器安全策略，也没有经过真实部署入口，应按 [网络与 HTTP](/back-end/frontend-backend-guide/22a-http-and-browser) 排查。
-4. **挑选测试层**：要证明“MySQL 同一幂等键并发只能创建一条”，能只 mock Repository 吗？参考：不能，未来须实现唯一约束和事务，再用真实 MySQL 多连接并发验证；mock 只能测局部分支。
-
-常见误解：测试多不等于风险全覆盖；覆盖率高不等于断言有效；MockMvc 不等于浏览器；H2 不等于 MySQL；没有权限模型时也就没有“越权已通过”的证据。
-
-下一站：[CI/CD 与部署](/back-end/frontend-backend-guide/36-cicd-deployment)，把已明确范围的验证放到流水线；回到 [API 设计](/back-end/frontend-backend-guide/34-api-design)，为每一个新承诺安排对应的测试与环境。
+主线下一篇：[D1 · 上传、导出、调度与回调](./39-backend-feature-map)。从已经测过的任务 API 出发，看看新增功能会带来哪些新的处理步骤。

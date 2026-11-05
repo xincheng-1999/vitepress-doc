@@ -2,15 +2,13 @@
 outline: false
 ---
 
-# Spring 学习路线已合并
+# Spring 学习从哪里开始？
 
-原来的独立 12 周路线与「前端转后端」课程存在重复和顺序冲突，现在统一到一条主线，避免你在两套目录间来回跳。
+这条路线已经合并到 [前端转后端教程](/back-end/frontend-backend-guide/index)，旧地址仍保留，方便从收藏进入。
 
-**从这里开始：[前端转后端：从请求到上线](/back-end/frontend-backend-guide/index)。**
+新路线先用一个任务功能解释请求，再学够用的 Java 和 Spring，实际运行接口，接着加入数据库、登录和部署。不需要先读完全部语言专题。
 
-- 想知道先学什么：[五阶段学习地图](/back-end/frontend-backend-guide/index)。
-- 想安排时间：[学习节奏与检查点](/back-end/frontend-backend-guide/93-learning-path)。
-- 想直接动手：[可运行任务 API](/back-end/frontend-backend-guide/07-build-a-crud-api)。
-- 想让 AI 帮写又知道怎么验收：[综合实战与 AI 协作检查](/back-end/frontend-backend-guide/38-capstone-feature-to-prod)。
-
-保留本地址供旧收藏访问，不再维护另一套重复课程。先单体、再按需求扩展；Java 语言与数据库细节保留为专题查阅。
+- [查看按顺序排列的课程](/back-end/frontend-backend-guide/index)
+- [直接运行第一个任务 API](/back-end/frontend-backend-guide/07-build-a-crud-api)
+- [看怎样安排学习](/back-end/frontend-backend-guide/93-learning-path)
+- [学完后组合一个完整功能](/back-end/frontend-backend-guide/38-capstone-feature-to-prod)

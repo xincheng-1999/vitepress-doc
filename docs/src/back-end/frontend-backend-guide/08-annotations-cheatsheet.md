@@ -1,282 +1,152 @@
 # 关键注解速查
 
-::: info 按需查阅 · 不属于第一轮必修
-本页保留旧版微服务 / JVM / 运维专题，`svc-*`、`cpt-*` 和 `RtData` 是解释场景，不是仓库中另有一套完整源码，也不代表主线依赖。第一次学习请返回 [五阶段主线](./index)；命令和输出需按自己的授权环境、系统与版本验证，不直接复制到生产。故障注入只在隔离实验进行，dump 与日志也可能包含敏感数据。
+::: info 按需查阅
+看到不认识的 `@注解` 时，再来查这一页，不需要先背完。旧文中的 `svc-*`、`cpt-*`、`RtData` 等只是示意名称，不是一套需要另找的可运行工程；本页示例也省略了业务类和 import。第一次学习可以继续走 [五阶段主线](./index)。
 :::
 
-
-> 本章是一本**随用随查的字典**，不需要从头读到尾。写代码时看到一个不认识的 `@注解`，回来翻这张表就行。
->
-> Java 注解（Annotation）就是代码上面那个 `@` 开头的东西。如果你写过 TypeScript 装饰器（`@decorator`）或 Python 装饰器（`@wrapper`），你会觉得很眼熟。不同的是，Java 注解大多由框架（Spring）在运行时读取并执行特定逻辑——注解本身不做事，是框架看到它才去做事。
-
-读到具体某个注解想看它**为什么**这么设计、IoC/DI 到底怎么运转，请去看 [Spring Boot 的 IoC 与 DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di)；本章只负责让你"认得、会用、用对位置"。
-
----
-
-## 控制器层注解
-
-这些注解是你在 svc-user、svc-auth 等服务的 `controller/` 目录下最常见的：
+比如看到这一行：
 
 ```java
-@RestController                    // 标记这个类是一个 REST API 控制器
-                                   // 前端类比：export default 一个 API handler 文件
-
-@RequestMapping("/v1/user")        // 给这个控制器设置 URL 前缀
-                                   // 前端类比：app.use('/v1/user', router)
-
-@GetMapping("/profile")            // 处理 GET /v1/user/profile
-@PostMapping("/login")             // 处理 POST /v1/user/login
-@PutMapping("/profile")            // 处理 PUT /v1/user/profile
-@DeleteMapping("/{id}")            // 处理 DELETE /v1/user/{id}
+@PostMapping("/login")
+public RtData<LoginResponse> login(@RequestBody @Validated LoginDto dto) {
+    return RtData.ok(userService.login(dto));
+}
 ```
 
-### 完整示例（svc-user 的登录 + 查资料）
+先读出三件事就够了：它处理登录的 POST 请求，从请求体读取数据，并在进入方法前校验数据。至于登录怎么完成，要继续看方法里的业务调用，注解不会替你实现它。
+
+**注解是附在代码上的说明，由编译器、代码生成工具或框架读取。** 不全是在运行时生效：Spring 的路由注解由框架处理，Lombok 则在编译期生成代码。它们看起来像 TypeScript 装饰器，但具体执行机制不能直接等同。
+
+## 请求怎么进入方法
+
+| 注解 | 放在哪里 | 作用 |
+| --- | --- | --- |
+| `@RestController` | 类上 | 注册控制器，返回值通常写入响应体；对象常被转换为 JSON |
+| `@RequestMapping("/v1/user")` | 类上或方法上 | 指定请求路径等匹配条件；类上的路径通常作为前缀 |
+| `@GetMapping("/profile")` | 方法上 | 处理 GET 请求 |
+| `@PostMapping("/login")` | 方法上 | 处理 POST 请求 |
+| `@PutMapping("/profile")` | 方法上 | 处理 PUT 请求 |
+| `@DeleteMapping("/{id}")` | 方法上 | 处理 DELETE 请求 |
+
+类上的前缀和方法上的路径接在一起，才是最终路径：
 
 ```java
-@RestController                            // 这是一个 API 控制器
-@RequestMapping("/v1/user")                // 前缀 /v1/user
-@Slf4j                                     // 自动生成 log 对象（后面讲）
+@RestController
+@RequestMapping("/v1/user")
 public class UserController {
+    private final UserService userService;
 
-    @Autowired                             // 注入 service（后面讲）
-    private UserService userService;
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
-    @PostMapping("/login")                 // POST /v1/user/login
-    public RtData<LoginResponse> login(
-        @RequestBody @Validated LoginDto dto   // 从请求体读取 JSON 并校验
-    ) {
+    @PostMapping("/login") // POST /v1/user/login
+    public RtData<LoginResponse> login(@RequestBody @Validated LoginDto dto) {
         return RtData.ok(userService.login(dto));
     }
 
-    @GetMapping("/profile")                // GET /v1/user/profile
-    public RtData<UserProfile> getProfile(
-        @RequestHeader("uid") Long uid     // 从请求头读取 uid（网关鉴权后透传下来）
-    ) {
+    @GetMapping("/profile") // GET /v1/user/profile
+    public RtData<UserProfile> getProfile(@RequestHeader("uid") Long uid) {
         return RtData.ok(userService.getProfile(uid));
     }
 }
 ```
 
-> 💡 **前端类比**：`@RestController` + `@RequestMapping` 合起来就像 Express 里的一个 `router`，方法上的 `@PostMapping("/login")` 就是 `router.post('/login', handler)`。返回的对象会被自动序列化成 JSON——你不用手写 `res.json(...)`，写 `return RtData.ok(data)` 就够了。
+这里的 `RtData` 只是示意用的响应包装类，不是 Spring 内置类型。示例保留了从请求头取 `uid` 的写法，但**读到请求头不等于完成鉴权**：客户端可以伪造它。只有可信网关已校验身份、覆盖外部同名头，且服务不能绕过网关访问等条件成立时，才能按约定信任；服务仍要检查数据访问权限。
 
----
+## 参数从哪里来
 
-## 参数绑定注解
+| 注解 | 对应请求位置 | 例子 |
+| --- | --- | --- |
+| `@RequestBody` | 请求体 | POST 的 JSON → `LoginDto` |
+| `@RequestParam("page")` | 请求参数，常见是查询串，也可以是表单字段 | `/users?page=1` → `int page` |
+| `@PathVariable("id")` | 路径中的占位符 | `/tasks/{id}` 匹配 `/tasks/123` → `String id` |
+| `@RequestHeader("uid")` | 请求头 | `uid: 1001` → `Long uid` |
 
-这些注解告诉框架"从请求的哪个位置读取参数"：
+如果前端使用 axios，`axios.post(url, data)` 中的 JSON `data` 通常对应 `@RequestBody`；`axios.get(url, { params: { page: 1 } })` 对应 `@RequestParam("page")`。**不是根据 GET 或 POST 猜注解，而是看数据实际放在哪里。**
 
-```java
-@RequestBody LoginDto dto              // 读取请求体 JSON 并映射为对象
-                                       // 前端类比：const dto = req.body
-
-@RequestHeader("uid") Long uid         // 读取请求头
-                                       // 前端类比：const uid = req.headers['uid']
-
-@PathVariable("id") String id          // 读取路径参数
-                                       // 前端类比：const { id } = req.params
-                                       // URL: /user/{id} → /user/123
-
-@RequestParam("page") int page         // 读取查询参数
-                                       // 前端类比：const page = req.query.page
-                                       // URL: /users?page=1
-
-@Validated                             // 自动校验参数（配合 DTO 中的校验注解）
-                                       // 前端类比：zod.parse(dto) 或 yup.validate(dto)
-```
-
-> ⚠️ **最常踩的坑**：`@RequestBody` 和 `@RequestParam` 弄混。
-> POST 的 JSON 在请求体里，用 `@RequestBody`；URL 上 `?page=1` 这种在查询串里，用 `@RequestParam`。前端用 axios 时，`axios.post(url, data)` 的 `data` 对应 `@RequestBody`，`axios.get(url, { params })` 的 `params` 对应 `@RequestParam`。
-
-### DTO 校验注解示例
+## 怎么触发输入校验
 
 ```java
 public class LoginDto {
-    @NotBlank(message = "手机号不能为空")     // 非空校验（字符串去空格后不能为空）
+    @NotBlank(message = "手机号不能为空")
     private String phone;
 
     @NotBlank(message = "验证码不能为空")
-    @Size(min = 4, max = 6)                  // 长度校验
+    @Size(min = 4, max = 6)
     private String verifyCode;
+
+    // getter、setter 省略
 }
 ```
 
-控制器方法参数加上 `@Validated` 后，校验不通过会自动抛异常，由全局异常处理器转成 `RtData.fail(msg)`，前端拿到的就是一条人能读懂的错误信息。
+字段上的注解定义规则，控制器参数上的 `@Validated`（也常见 `@Valid`）触发对象校验。项目还需要相应的校验依赖；Spring Boot 3 的这些字段校验注解来自 `jakarta.validation.constraints`。
 
-> 💡 **前端类比**：这就是 Java 版的 zod schema——校验规则贴在字段上，框架在入口处帮你挡住非法数据：
-> ```typescript
-> const LoginSchema = z.object({
->   phone: z.string().min(1, "手机号不能为空"),
->   verifyCode: z.string().min(4).max(6),
-> })
-> ```
+校验不通过时，Spring 会产生相应异常。**是否转成 `RtData.fail(...)`、返回什么状态码，要看项目的异常处理器**，不是校验注解自动决定的。格式校验也不能代替登录认证、权限和业务规则。
 
-常用校验注解一并记住：
-
-| 注解 | 作用 | zod 对应 |
+| 注解 | 检查什么 | 容易误解的地方 |
 | --- | --- | --- |
-| `@NotNull` | 不能为 null | `.nullable()` 的反面 |
-| `@NotBlank` | 字符串非空且非纯空格 | `.string().min(1)` |
-| `@NotEmpty` | 集合/字符串非空 | `.array().nonempty()` |
-| `@Size(min, max)` | 长度/元素个数范围 | `.min().max()` |
-| `@Min` / `@Max` | 数值范围 | `.gte()` / `.lte()` |
-| `@Email` | 邮箱格式 | `.email()` |
-| `@Pattern(regexp)` | 正则匹配 | `.regex()` |
+| `@NotNull` | 不能是 `null` | 不检查空字符串或空集合 |
+| `@NotBlank` | 字符串不是 `null`，且含非空白字符 | 适合必填文本；手机号格式还要另定规则 |
+| `@NotEmpty` | 字符串、集合、数组等非空 | 字符串只含空格也可能通过 |
+| `@Size(min, max)` | 字符串长度或集合元素个数 | 通常允许 `null`，必填时配合非空规则 |
+| `@Min`、`@Max` | 数值上下限 | 不是字符串长度 |
+| `@Email` | 邮箱格式 | 不代表邮箱存在或属于此用户 |
+| `@Pattern(regexp = "...")` | 字符串匹配正则 | 规则和错误信息都要自己定义 |
 
----
+## 对象由谁创建，依赖从哪里来
 
-## 业务层注解
-
-```java
-@Service                     // 标记为业务逻辑类
-                             // 前端类比：定义一个 service 模块
-
-@Repository                  // 标记为数据访问类
-                             // 前端类比：定义一个 data-access 模块
-
-@Component                   // 通用组件标记，Spring 会自动创建实例并管理
-                             // 前端类比：通过 provide() 注册一个全局服务
-
-@Autowired                   // 自动注入依赖
-                             // 前端类比：const service = useContext(ServiceContext)
-                             // 或 Vue 的 inject('service')
-
-@Resource                    // 功能同 @Autowired，但默认按名称注入
-                             // 当有多个同类型 Bean 时用名称区分
-```
-
-`@Service`、`@Repository`、`@Component` 本质上是同一件事的三个语义化别名：都告诉 Spring "把这个类管起来，自动 new 一个实例放进容器"。差别只在于读代码的人一眼就知道这是业务层、数据层还是通用组件。
-
-### 依赖注入原理（重要概念）
-
-```text
-传统写法（前端思维）：
-  const userService = new UserService(new UserRepository(new MongoClient()))
-  // 你要自己 new 所有依赖，层层嵌套，谁依赖谁全靠手动拼
-
-Spring 写法（后端）：
-  @Autowired
-  private UserService userService;
-  // 框架启动时自动 new 好所有依赖、按需注入，你直接用就行
-
-前端类比：
-  // Vue 3 的 provide/inject
-  // 父组件 provide('userService', new UserService())
-  // 子组件 const userService = inject('userService')
-```
-
-一句话：**你不再自己 `new` 对象，而是声明"我需要什么"，由容器递给你。** 这套机制叫 IoC（控制反转）/ DI（依赖注入），是整个 Spring 的地基。
-
-> 想看它完整运转的过程——Bean 是什么、容器何时创建、构造器注入 vs 字段注入怎么选、出现多个候选 Bean 怎么办——去读 [Spring Boot 的 IoC 与 DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di)。本章不展开，只让你认得这几个注解。
-
----
-
-## 数据层注解
-
-我们的项目里 MongoDB 是主库（用 Spring Data），MySQL 做统计（用 MyBatis-Plus），两套 ORM 的注解长得不一样，对照着记：
-
-```java
-// ===== MongoDB（Spring Data，svc-canvas 的任务文档） =====
-@Document(collection = "canvas_task")  // 标记这个类映射到 MongoDB 的 canvas_task 集合
-@Id                                     // 标记主键字段（_id）
-@Indexed                                // 给这个字段建索引
-
-// ===== MySQL（MyBatis-Plus，svc-user 的每日统计表） =====
-@TableName("daily_statistics")         // 标记这个类映射到 MySQL 的 daily_statistics 表
-@TableId(type = IdType.AUTO)           // 标记主键并设置为自增
-@TableField("user_id")                 // 字段名与列名不一致时显式映射
-```
-
-> 💡 **前端类比**：这就像 Prisma 的 `@@map("table_name")` / `@map("column")`——把代码里的属性名和数据库里的表名、列名对应起来。区别是 Prisma 写在 schema 文件里，这里写在 Java 类的字段上。
-
----
-
-## 常见辅助注解
-
-```java
-@Slf4j
-// 自动生成日志对象 log（Lombok 提供，编译期帮你写好那行 LoggerFactory）
-// 前端类比：const log = console
-// 用法：log.info("用户 {} 登录成功", uid);
-//       log.error("登录失败", exception);
-//       注意占位符是 {}，不是模板字符串 ${}
-
-@Value("${app.name:默认值}")
-// 从配置文件（application.yml）读取值，冒号后是默认值
-// 前端类比：const appName = import.meta.env.VITE_APP_NAME ?? '默认值'
-
-@PostConstruct
-// 对象创建完成后自动执行一次（常用于初始化缓存、预加载配额规则）
-// 前端类比：useEffect(() => { /* 初始化 */ }, [])
-// 或 Vue 的 onMounted()
-
-@ConditionalOnProperty(name = "feature.xx", havingValue = "true")
-// 根据配置决定是否加载这个类（功能开关 / feature flag）
-// 前端类比：if (featureFlags.xx) { loadModule() }
-```
-
-### Lombok 一族（少写样板代码）
-
-`@Slf4j` 来自 Lombok，它还有一批"帮你少敲键盘"的注解，项目里到处都是：
-
-```java
-@Data                  // 自动生成 getter/setter/toString/equals/hashCode
-                       // 前端类比：本来就有的 obj.field，Java 需要这个才有
-
-@Builder               // 生成链式构建器：LoginDto.builder().phone("...").build()
-                       // 前端类比：直接写对象字面量 { phone: '...' }
-
-@AllArgsConstructor    // 生成全参构造器
-@NoArgsConstructor     // 生成无参构造器
-@RequiredArgsConstructor // 给 final 字段生成构造器（推荐用它做构造器注入）
-```
-
-> 💡 Lombok 的本质是**编译期代码生成**，类似前端的 Babel 插件——你写的简洁代码在编译后会被展开成完整的 Java。所以 IDE 需要装 Lombok 插件才能正确识别这些"凭空多出来"的方法。
-
----
-
-## 注解速查卡片
-
-随用随查，认不出来就翻这张表：
-
-| 注解 | 一句话解释 | 前端类比 |
+| 注解 | 常见位置 | 作用与边界 |
 | --- | --- | --- |
-| `@RestController` | 这个类是 API 入口 | API route handler |
-| `@RequestMapping` | URL 前缀 | `app.use('/prefix')` |
-| `@GetMapping` | 处理 GET 请求 | `router.get()` |
-| `@PostMapping` | 处理 POST 请求 | `router.post()` |
-| `@RequestBody` | 读取请求体 JSON | `req.body` / axios `data` |
-| `@RequestHeader` | 读取请求头 | `req.headers['xxx']` |
-| `@PathVariable` | 读取路径参数 | `req.params.xxx` |
-| `@RequestParam` | 读取查询参数 | `req.query.xxx` / axios `params` |
-| `@Validated` | 自动校验参数 | `zod.parse()` |
-| `@NotBlank` / `@Size` | 字段级校验规则 | zod schema 字段约束 |
-| `@Service` | 标记业务逻辑类 | Service 模块 |
-| `@Repository` | 标记数据访问类 | data-access 模块 |
-| `@Component` | 通用受管组件 | `provide()` 注册的服务 |
-| `@Autowired` / `@Resource` | 自动注入依赖 | `inject()` / `useContext()` |
-| `@Slf4j` | 自动生成 log | `console` |
-| `@Value` | 读取配置值 | `import.meta.env` |
-| `@PostConstruct` | 创建后初始化一次 | `onMounted()` / `useEffect([])` |
-| `@Data` / `@Builder` | 生成样板代码 | 对象字面量 / Babel 转换 |
-| `@Document` | MongoDB 集合映射 | Prisma `@@map` |
-| `@TableName` / `@TableId` | MySQL 表/主键映射 | Prisma `@@map` / `@id` |
+| `@Component` | 通用组件类 | 在组件扫描等条件满足时，注册为 Spring 管理的对象 |
+| `@Service` | 业务类 | `@Component` 的业务层语义标记 |
+| `@Repository` | 数据访问类 | 组件标记；配合相应机制还可参与持久化异常转换 |
+| `@Autowired` | 构造器、字段等 | 让 Spring 按类型等规则寻找并注入依赖 |
+| `@Resource` | 字段、setter 等 | 常用于按名称寻找依赖，也有相应的类型匹配规则 |
 
----
+Spring 管理的对象叫 **Bean**。上面的 `UserController` 通过构造器拿到 `UserService`，不用在方法里自己 `new` 它。只有一个构造器时，通常可以省略 `@Autowired`。多个候选对象、扫描范围等细节见 [Spring Boot 的 IoC 与 DI](/back-end/frontend-backend-guide/06-spring-boot-ioc-di)，这里不重复展开。
 
-## 小结
+## Java 对象怎么对应数据库记录
 
-- 注解本身不做事，是**框架运行时读到它才去做事**——心智模型等同于 TS/Python 装饰器。
-- 按"在哪层"记最省力：控制器层（路由 + 参数绑定 + 校验）、业务层（受管组件 + 注入）、数据层（表/集合映射）、辅助（日志、配置、Lombok）。
-- 参数绑定别记混：请求体 `@RequestBody`、查询串 `@RequestParam`、路径 `@PathVariable`、请求头 `@RequestHeader`。
-- 校验注解贴在 DTO 字段上、`@Validated` 贴在方法参数上，二者配合才生效，效果等同前端的 zod。
-- `@Service`/`@Repository`/`@Component` 是同一机制的三个语义别名；`@Autowired` 背后是 IoC/DI 这套地基。
+下面是**两种不同框架的写法**，不是要求任务系统同时安装两套数据库：
 
-### 自测
+| 注解 | 所属框架 | 含义 |
+| --- | --- | --- |
+| `@Document(collection = "canvas_task")` | Spring Data MongoDB | 类映射到指定集合 |
+| `@Id` | 此处指 Spring Data 的注解 | 标记 MongoDB 文档的 `_id` 字段 |
+| `@Indexed` | Spring Data MongoDB | 声明索引信息；实际创建还取决于配置或显式建索引操作 |
+| `@TableName("daily_statistics")` | MyBatis-Plus | 类映射到指定关系表 |
+| `@TableId(type = IdType.AUTO)` | MyBatis-Plus | 声明主键映射和自增策略，数据库也要正确配置 |
+| `@TableField("user_id")` | MyBatis-Plus | 属性名与列名的显式映射 |
 
-1. 前端用 `axios.get('/v1/user/list', { params: { page: 1 } })` 请求，后端方法该用哪个注解接 `page`？换成 `axios.post('/v1/user/login', dto)` 又该用哪个？
-2. DTO 字段上写了 `@NotBlank`，但请求传空值时校验没生效，最可能漏了什么？
-3. `@Service` 和 `@Repository` 在功能上有区别吗？为什么还要分两个？
+同名注解可能来自不同包，读代码时要一起看 import。主线 CRUD 用的是 JDBC，不需要为了看懂它引入这里的注解。
 
-### 下一章
+## 配置、初始化与日志
 
-注解认全了，接下来该正经看数据库了——先搞清楚关系型与 NoSQL 各自适合什么场景：[SQL vs NoSQL](/back-end/frontend-backend-guide/09-sql-vs-nosql)。
+| 注解 | 谁处理 | 常见用途 |
+| --- | --- | --- |
+| `@Value("${app.name:默认值}")` | Spring | 从配置中读取值，冒号后是默认值 |
+| `@PostConstruct` | 生命周期管理机制 | 依赖注入完成后执行初始化方法，不是每次请求执行 |
+| `@ConditionalOnProperty(name = "feature.xx", havingValue = "true")` | Spring Boot | 按配置决定是否注册相关 Bean；不是每次调用都判断开关 |
+| `@Slf4j` | Lombok | 编译时生成 `log` 字段 |
+
+```java
+log.info("任务 {} 创建成功", taskId);
+log.error("任务创建失败", exception);
+```
+
+日志占位符是 `{}`，不是 `${}`。不要把验证码、密码等敏感数据直接写进日志。
+
+## Lombok：省掉哪些样板代码
+
+| 注解 | 生成内容 | 注意 |
+| --- | --- | --- |
+| `@Data` | getter、setter、`toString`、`equals`、`hashCode` 等 | 不只是开放字段；生成的方法也要符合对象语义 |
+| `@Builder` | 构建器，如 `LoginDto.builder().phone("...").build()` | 不会自动校验业务数据 |
+| `@AllArgsConstructor` | 全参构造器 | 与其他构造器写法一起使用时注意冲突 |
+| `@NoArgsConstructor` | 无参构造器 | 某些框架需要它，并非所有类都需要 |
+| `@RequiredArgsConstructor` | 为未初始化的 `final` 字段和相应非空字段生成构造器 | 常用于构造器注入 |
+
+这些代码在编译期生成。IDE 的 Lombok 支持和构建中的注解处理都需要正常工作，不能仅凭编辑器没报错判断构建成功。
+
+查完一个注解，回到它所在的方法继续读即可。若要了解数据库选择，可按需看 [SQL vs NoSQL](/back-end/frontend-backend-guide/09-sql-vs-nosql)，不用把本页当作进入后续章节的考试。

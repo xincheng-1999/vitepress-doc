@@ -3,33 +3,29 @@ prev: false
 next: false
 ---
 
-# 90. 场景词典：听懂术语，更要知道它解决什么
+# 场景词典：遇到生词时来查
 
-## 学习目标与查阅方式
+这里按请求、数据库、登录、部署等场景整理了 170 个条目。可以用页面搜索找具体词，也可以从目录选择对应场景，不需要从头背完。
 
-- 遇到生词能用一句定义说明它是什么，再说出它解决的现实问题。
-- 能识别“听起来像”却不等价的概念，不把前端比喻当成实现保证。
-- 沿每条的“相关教程”回到场景学习，而不是背完词典才开始写代码。
+先看它是什么，再看工作中为什么会用到。想理解完整过程，就打开最后一列的教程；“常见误区”留作使用时的提醒。
 
-共同场景是 **Java 17 + Spring Boot 3.x 的单体 `task-api`**，本地 `8080`，核心入口 `/api/tasks`。第一课用 H2 起步，持久化主线用 MySQL；Redis、MQ、ES、Kubernetes、微服务都是按需求引入的选修能力，不是启动清单。
-
-每个条目都回答四个问题：**定义 / 解决什么问题 / 常见误区 / 去哪里学**。有些词在不同产品中语义不同，表中给出本教程常用含义；精确保证仍以所选实现和配置为准。
+例子大多沿用任务系统。同一个词在不同团队或产品里可能含义不同，实际工作时还要结合对方正在说的场景。
 
 ## A. 接到一个需求：代码放哪、接口怎么表达
 
 | 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
 | --- | --- | --- | --- | --- |
-| 单体 Monolith | 主要业务模块一起构建、部署的应用形态 | 小团队先在一个进程中交付完整功能 | 单体不等于所有逻辑写在一个类，也能分模块 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
-| 微服务 Microservices | 按业务边界独立运行、部署并通过网络协作的服务 | 有证据的独立发布、扩缩与团队自治 | 拆几个 Controller 不叫微服务，网络故障和一致性成本不会消失 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
-| Controller | 将 HTTP 输入输出适配到应用操作的入口 | 接收参数、调用业务、组织响应 | 不是所有业务都该放在 Controller，也不是前端路由守卫 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
-| Service（业务层） | 封装业务用例与规则的组件 | 决定谁能改任务、如何校验状态和划事务 | 不等于 Kubernetes Service，也不自动是独立服务 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
-| Repository / Mapper | 数据访问抽象或映射组件 | 集中处理任务查询、更新与持久化映射 | 不是浏览器 api 请求文件；换数据库也不保证只改一行 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
-| Entity | 与持久化模型有关的实体对象 | 表达任务的数据及映射规则 | 不等于 TypeScript interface；也不应无条件直接作为接口响应 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
-| DTO | 面向数据传输边界的数据结构 | 明确创建任务可输入哪些字段 | 有 DTO 不等于自动校验业务权限，更不能任意绑定 owner/role | [API](/back-end/frontend-backend-guide/34-api-design) |
-| VO / 响应模型 | 本教程中指面向展示的响应结构 | 隐藏内部字段，保持接口契约稳定 | 有些领域设计语境 VO 指 Value Object，需先确认上下文 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
-| POJO | 不要求继承特定框架类型的普通 Java 对象 | 让数据与业务对象尽量少依赖框架 | POJO 不一定只有 getter/setter，也不天然是 Spring Bean | [Java](/back-end/frontend-backend-guide/05-java-crash-course) |
-| REST | 资源、统一接口等约束构成的架构风格 | 用清晰资源与 HTTP 语义建立接口 | URL 没有动词不代表已经满足所有 REST 约束 | [API](/back-end/frontend-backend-guide/34-api-design) |
-| CRUD | 创建、读取、更新、删除四类基本数据操作 | 最小闭环地维护任务资源 | CRUD 跑通不等于权限、事务、并发都正确 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| 单体 Monolith | 多个业务功能放在同一个应用里，一起构建和发布 | 起步时只需启动一个应用，就能跟完整个任务功能 | 仍可以分包、分模块，不是把代码全写进一个类 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| 微服务 Microservices | 按业务拆成能独立运行和发布的服务，通过网络协作 | 某个功能或团队确实需要独立发布和扩容 | 拆几个 Controller 不够，还会多出网络和跨服务数据问题 | [架构](/back-end/frontend-backend-guide/02-architecture-overview) |
+| Controller | 接 HTTP 请求、调用业务方法、返回响应的入口 | 找到某条接口对应的处理代码 | 不宜把 SQL 和全部业务规则都塞进入口 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| Service（业务层） | 集中处理某个业务操作的代码 | 创建任务时检查规则，再安排保存操作 | 不是 Kubernetes Service，也未必是独立运行的服务 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| Repository / Mapper | 负责数据库查询、保存及数据转换的代码 | 让任务的 SQL 和结果映射有明确位置 | 不是浏览器请求封装；换数据库也可能影响其他业务代码 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
+| Entity | 用对象表达需要持久保存的业务数据 | 在代码里表示一条任务及其存储关系 | 不宜不加选择地把全部字段直接返回前端 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| DTO | 用来传数据的对象，例如创建任务的请求类型 | 写清一次请求允许提交哪些字段 | 对象定义好了，仍要检查数据和权限 | [API](/back-end/frontend-backend-guide/34-api-design) |
+| VO / 响应模型 | 这里指准备展示或返回前端的数据结构 | 只返回前端需要且允许看到的字段 | VO 在其他语境也可能指 Value Object，先问清用法 | [分层](/back-end/frontend-backend-guide/04-three-layer-and-structure) |
+| POJO | 不必继承指定框架类型的普通 Java 对象 | 数据和业务不必处处依赖某个框架 | 不一定只有 getter/setter，也不一定交给 Spring 管理 | [Java](/back-end/frontend-backend-guide/05-java-crash-course) |
+| REST | 围绕资源、统一接口等约束组织系统的设计风格 | 用任务资源和 HTTP 方法表达接口操作 | URL 不带动词，只是常见写法，不代表满足了全部约束 | [API](/back-end/frontend-backend-guide/34-api-design) |
+| CRUD | 创建、读取、更新和删除 | 先完成任务的基本管理功能 | 跑通以后，仍要补数据校验、权限和并发处理 | [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) |
 | 分页 Pagination | 每次只返回数据集合的一部分 | 控制列表响应大小与查询成本 | 深 offset 可能慢，数据变化也可能让翻页重复/遗漏 | [API](/back-end/frontend-backend-guide/34-api-design) |
 | 幂等键 Idempotency Key | 标识一次逻辑操作的稳定客户端/业务键 | 网络重试时返回原结果，避免重复创建 | 相同键用于不同请求内容不能静默复用；需要唯一约束与作用域 | [API](/back-end/frontend-backend-guide/34-api-design) |
 
@@ -224,64 +220,29 @@ next: false
 
 | 术语 | 定义 | 解决什么问题 | 常见误区 | 相关教程 |
 | --- | --- | --- | --- | --- |
-| 公网与内网 | 公网面向互联网路由，内网通常指组织控制的私有网络及访问范围 | 判断办公电脑访问生产主机应走公网入口还是受控内网通道 | 私有 IP 不代表可跨网络直达；内网也可能被入侵，不能省略认证、授权与加密 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| VPC | 云上由租户配置地址、路由与访问策略的逻辑私有网络 | 隔离测试与生产网络，并规划应用、数据库的连接边界 | 同一 VPC 不代表所有端口互通；跨 VPC 还需连接、路由和安全策略，不是绝对安全隔离保证 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 子网与路由表 | 子网划分地址范围，路由表决定匹配目的地址的流量下一跳 | 排查 VPN 后只通部分网段、请求能出去但回程走错的问题 | 有路由不等于获准访问；还要检查回程、地址重叠及两端过滤策略 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| VPN | 在端点或网络之间建立受保护隧道的接入方式 | 让远程办公电脑按配置访问公司指定网段 | 连上只说明隧道建立，不代表全内网授权；分流路由、DNS、资源策略与目标账号仍独立生效 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 零信任接入ZTNA | 按身份、设备状态等策略向特定资源开放访问的接入模式 | 给员工或外包按需开放某个内部应用，而非整个网段 | 不是装上客户端就永远可信；策略校验频率与协议覆盖看实现，也不替代应用内授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 跳板机Jump Host | 用作访问其他主机中转点的主机 | 通过受控入口以 SSH ProxyJump 等方式连接没有公网入口的生产主机 | 能中转不等于自带审批、凭据托管或完整录像；目标主机仍须验证身份并授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 堡垒机Bastion | 集中管理运维入口、资产访问与部分审计能力的系统；名称也可能仅指加固跳板主机 | 为生产登录统一身份、审批、目标账号授权和会话记录入口 | 登录堡垒机不等于有全部资产权限；审计受协议、接入路径和配置限制，旁路或未覆盖操作不会自动完整记录 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| PAM特权访问管理 | 管理高权限身份、凭据与特权会话生命周期的一组机制 | 为临时排障提供限时提权、凭据托管、轮换与回收 | 不只是密码保险箱；未接管的账号和旁路仍有风险，提权不能跳过审批或目标系统权限边界 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| SSH | 提供加密传输、主机身份校验和用户认证的远程访问协议 | 安全登录 Linux 主机、执行命令或建立获准的转发连接 | SSH 认证成功不等于有 sudo 或数据库权限；端口可达也不代表主机可信，应校验主机身份 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 公钥与私钥 | 成对的非对称密钥；SSH 公钥认证中私钥用于签名，公钥用于验证 | 不共享登录密码，将个人公钥授权给指定主机账号 | 公钥可分发，私钥不能上传跳板机或提交仓库；密钥口令不替代权限回收，泄露后仍需撤销相关授权并换钥 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 主机指纹与known_hosts | 主机指纹标识主机公钥，known_hosts 保存已信任的主机密钥关联 | 首次连接核对服务器身份，并发现后续密钥异常变化 | 指纹变化可能是重装也可能是冒充；应从可信渠道核对，不能盲删记录或关闭校验来消除告警 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| SSH Agent与Agent转发 | Agent 代为完成私钥签名，转发让远端通过转发通道请求本地 Agent 签名 | 减少重复输入密钥口令，并在必要的多跳操作中避免复制私钥 | 转发虽不直接复制私钥，受控远端仍可能借 Agent 冒用身份；默认不转发，单纯中转优先使用 ProxyJump | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| SSH隧道与端口转发 | 通过 SSH 连接转送本地、远端端口或动态代理流量 | 经获准跳板访问仅内网可达的数据库，而不直接暴露数据库公网端口 | 隧道不替代数据库认证与授权；目标看到的是转发出口，监听地址过宽还会把访问能力暴露给别人 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 安全组 | 云平台绑定实例、网卡等资源的网络访问规则集合，具体作用范围依产品而定 | 只允许指定应用来源访问数据库端口，定位云侧拦截 | 不能假定各种云安全组都有相同有状态规则；入出方向、连接跟踪、规则合并及返回流量行为须查对应产品与配置 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 防火墙 | 在主机或网络边界按策略过滤流量的机制 | 云侧已放行但主机端口仍不可达时，检查主机或中间设备的阻断规则 | 放行一个防火墙不代表整条链路通；防火墙也不替代目标服务认证，不应为排障直接关闭全部防护 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 网络ACL | 在子网等网络边界按地址、协议、端口等条件允许或拒绝流量的规则列表 | 在网段边界限制访问，并排查安全组放行后仍被拦截的连接 | 规则顺序、有状态或无状态语义依产品而异；无状态规则需考虑回程端口，不能照搬安全组配置 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| IP白名单allowlist | 仅允许匹配指定 IP 或网段的来源访问的策略 | 为数据库或供应商接口限制公司获准的访问出口 | 应填目标实际看到的源 IP，未必是电脑内网 IP；共享出口不等于同一可信用户，仍需身份认证与最小授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| NAT与出口IP | NAT 转换报文地址等信息，出口 IP 是对端实际看到的来源地址 | 解释办公电脑或私有子网访问第三方时，为何应登记网关的出口地址 | 出口可能因多网关或故障切换变化；NAT 不等于身份校验，也不代表外部可以主动连入或内网天然安全 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| IAM | 管理身份、角色和访问策略的体系，云 IAM 常控制云资源管理及 API 操作 | 限制谁能查看主机、修改安全组或获取临时云凭据 | 有云控制台权限不等于能登录操作系统或查询数据库；只有明确集成时才联动，仍须区分各层账号与授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
-| 运维审计与会话录像 | 记录运维身份、目标、时间、操作及受支持会话内容的追溯机制 | 复盘谁在何时进入生产、执行了什么，并关联变更与数据库日志 | 录像不保证覆盖旁路、所有协议或隧道内操作；还需验证采集范围、时间同步、防篡改、留存和敏感信息访问权限 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 公网与内网 | 公网通过互联网寻址，内网按公司管理的网络范围访问 | 判断在家怎样连接公司的服务器 | 私有地址未必能直达；在内网也要检查身份和权限 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| VPC | 云平台上可以自己配置的一片逻辑隔离网络 | 安排应用和数据库放在哪里、怎样连接 | 同一 VPC 中仍可能有访问限制，跨 VPC 还需配置通路 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 子网与路由表 | 子网划分地址范围，路由表决定数据下一步往哪里送 | 检查请求能否找到目标，以及响应能否返回 | 还要看回程、地址是否重叠和访问规则 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| VPN | 为电脑或网络之间建立受保护通道的接入方式 | 在家按公司配置访问内部网络 | 连上 VPN 后，目标服务器仍会检查登录身份和权限 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 零信任接入ZTNA | 根据账号、设备等条件，开放指定内部资源 | 只让员工访问工作需要的某个应用 | 安装客户端不代表永久可信；应用本身仍需授权 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 跳板机Jump Host | 帮你中转到另一台机器的主机 | 连接不能从自己电脑直达的服务器 | 中转功能本身不包含完整审批和录像；目标仍需验证身份 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 堡垒机Bastion | 企业里常指管理服务器访问和操作记录的平台 | 统一登录入口，管理谁可以进入哪些机器 | 权限和记录范围要看配置；英文名称有时仅指加固跳板主机 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| PAM特权访问管理 | 管理管理员等高权限账号怎样被使用 | 保管和轮换密码，临时授权，到期收回 | 要确认哪些账号已被接管，未覆盖的访问仍有风险 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH | 能加密连接、核对服务器和登录身份的远程访问协议 | 登录 Linux 服务器、执行命令或获准的转发 | 登录成功后，也只能做该账号被允许的操作 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 公钥与私钥 | 配对的密钥；SSH 登录时用私钥签名、公钥验证 | 不用共享服务器密码，也能验证登录者 | 私钥留在受控设备，不上传跳板或仓库；泄露后要撤销授权并换钥 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 主机指纹与known_hosts | 指纹用来核对主机公钥，known_hosts 保存已信任的记录 | 确认自己连接的是预期服务器 | 指纹变化先向管理员核实，不直接删记录或关闭验证 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH Agent与Agent转发 | Agent 代你签名；转发允许远端请求这个签名能力 | 减少重复输入密钥口令 | 远端可能冒用签名能力，默认不转发；单纯跳转通常用 ProxyJump 即可 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| SSH隧道与端口转发 | 经 SSH 连接，把一个端口收到的数据转送到目标 | 按批准的方式，让本机工具连接内部数据库 | 仍需数据库账号；只监听本机回环，不能用它绕过审计 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 安全组 | 云平台中限制哪些网络连接可以通过的规则 | 例如只让应用机器访问数据库端口 | 各云的方向、状态和返回流量规则可能不同，先查产品说明 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 防火墙 | 在主机或中间网络设备上，按规则放行或拦截流量 | 检查连接是否在途中被拦住 | 放行一处还不代表全程畅通，不要为排错关闭全部防护 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 网络ACL | 按地址、协议和端口等条件允许或拒绝流量的规则列表 | 在网段等位置控制连接 | 顺序和状态规则依产品而定；无状态规则也要考虑回程 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| IP白名单allowlist | 列出允许访问的来源 IP 或网段 | 让数据库或供应商接口只接受指定来源 | 填对方实际看到的 IP；共用一个出口的人仍需分别认证 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| NAT与出口IP | NAT 转换网络地址，出口 IP 是对方看到的来源地址 | 解释为何电脑上的地址和白名单里要填的地址不同 | 多台电脑可能共用出口，出口也可能变化；地址不等于身份 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| IAM | 管理账号、角色和访问权限的体系 | 决定谁能在云平台查看机器、修改配置等 | 云控制台权限和服务器、数据库账号要分别确认 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
+| 运维审计与会话录像 | 在支持范围内记录谁访问了哪台机器、做了什么 | 查变更和故障时回看操作过程 | 先确认是否覆盖这条连接、记录保存多久，以及谁能查看 | [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access) |
 
-## 动手练习：把术语翻译成可验收的方案
+## 查到意思以后，再放回原来的问题
 
-任选一条需求：“给我的任务加附件”“每天导出团队报表”或“任务完成后通知负责人”。用不超过十个术语写一页方案，每个术语必须说明：
+比如同事说“导出放到后台，通过 MQ 通知 worker”，先知道 MQ 传消息、worker 做导出，再去 [后台任务](./33-mq-reliability) 看它们怎样配合。没有必要顺着这个词，把整套消息系统的术语都读一遍。
 
-1. 解决的具体问题，最简单方案是什么。
-2. 该能力失败后，如何知道、如何恢复、会不会重复。
-3. 哪些东西不是这个能力能保证的。
-
-**预期结果**：例如“任务完成发站内信”可以先用同一本地事务保存通知；需要外部投递后再评估 job/outbox。不是为了使用 MQ、Redis、微服务，把本来一个事务能解决的需求拆出三种故障窗口。更多案例见 [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)。
-
-## 自测与答案
-
-1. POJO 一定是 Bean 吗？
-
-   **答案**：不是。POJO 描述普通 Java 对象风格；Spring Bean 描述对象是否由容器管理。普通 POJO 可以被注册为 Bean，也可以完全不进入容器。
-2. 为什么限流不是防抖、MQ 不是 EventEmitter？
-
-   **答案**：前者是服务端资源/流量政策，不依赖用户页面；后者涉及跨进程投递、存储、确认与恢复，本地事件分发不提供这些保证。
-3. JWT 存在哪，和它是不是 JWT 有什么关系？
-
-   **答案**：令牌格式与存储位置是两条独立决策。localStorage、Cookie、内存各有风险，必须按发送方式评估 XSS、CSRF 和撤销边界。
-4. Docker 镜像与 Kubernetes Secret 能否分别理解成“完整 OS”“加密配置”？
-
-   **答案**：不能。Linux 容器共享其运行宿主内核，镜像主要带用户态文件与配置；Secret 的 Base64 不提供机密性，需要额外访问和加密保护。
-5. 慢请求的 P99 很高，平均值正常，应该先加线程吗？
-
-   **答案**：先看时间窗口、样本与链路，检查连接池等待、锁、GC、数据库和依赖尾延迟；加线程可能加重拥堵。
-6. 延迟消息到期后就等于定时作业完成了吗？
-
-   **答案**：不是。可见/投递、被认领、实际执行成功是不同阶段；调度还需漏跑、补跑、时区、并发与历史记录。
-7. VPN连上且堡垒机登录成功，为什么SSH/数据库仍拒绝？
-
-   **答案**：隧道与入口登录只通过了前两道检查，不等于目标资源授权。先区分超时、连接被拒绝和认证/授权失败，再按实际路径检查 DNS、双向路由、安全组/ACL/防火墙、目标监听与来源白名单；经跳板或隧道访问时要确认目标实际看到的源 IP。最后核对堡垒机资产授权、目标 SSH 账号与密钥、数据库账号与权限及所需 TLS，结合对应日志定位，不靠全网放行绕过边界。参见 [内网接入与权限](/back-end/frontend-backend-guide/22c-private-network-and-access)。
-
-## 相关教程
-
-- [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)：先还原需求，再选技术。
-- [登录安全](/back-end/frontend-backend-guide/32-security) / [消息任务可靠性](/back-end/frontend-backend-guide/33-mq-reliability)：理解最容易被口号掩盖的边界。
-- [排查方法论](/back-end/frontend-backend-guide/27-troubleshooting-methodology) / [命令速查](/back-end/frontend-backend-guide/91-command-cheatsheet)：先有假设，后选命令。
-- [学习路径](/back-end/frontend-backend-guide/93-learning-path)：按最小主线使用词典，不必从头背完。
+如果只是想把一个功能做出来，可以直接从 [功能地图](./39-backend-feature-map) 找对应需求。需要按顺序学习时，则回到 [课程地图](./index)。

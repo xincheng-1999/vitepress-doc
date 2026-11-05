@@ -18,7 +18,7 @@ export const backendGuideSidebar = [
     text: "开始学习 / 随时查词",
     items: [
       page("学习地图：从这里开始", "index"),
-      page("学习节奏与检查点", "93-learning-path"),
+      page("学习安排与常见卡点", "93-learning-path"),
       page("170 条场景术语", "90-glossary"),
     ],
   },
@@ -82,7 +82,7 @@ export const backendGuideSidebar = [
     text: "查阅 · 语言、存储与命令",
     collapsed: true,
     items: [
-      page("注解速查（旧场景示例）", "08-annotations-cheatsheet"),
+      page("注解速查", "08-annotations-cheatsheet"),
       page("SQL / NoSQL 选型", "09-sql-vs-nosql"),
       { text: "Java 细节专题", link: "/back-end/java/01-environment.md" },
       { text: "数据库细节专题", link: "/back-end/database/index.md" },
@@ -114,7 +114,7 @@ export const backendGuideSidebar = [
       page("可观测性", "30-observability"),
       page("性能与容量", "31-performance-concurrency"),
       page("CI/CD 与部署", "36-cicd-deployment"),
-      page("选修练习（旧场景片段）", "37-hands-on-exercises"),
+      page("选修练习：按题补充", "37-hands-on-exercises"),
     ],
   },
 ];

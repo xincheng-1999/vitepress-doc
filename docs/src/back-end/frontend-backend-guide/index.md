@@ -5,114 +5,98 @@ next:
   link: "/back-end/frontend-backend-guide/01-backend-mindset"
 ---
 
-# 前端转后端：从请求到上线
+# 前端转后端：从一个任务功能开始
 
-> 不从微服务全家桶开始，也不先背完 Java。沿着一个「任务管理系统」，看清请求、写出接口、存好数据、守住权限，再把它部署并查明故障。
+这套教程面向会写 JavaScript / TypeScript、会调用接口的前端开发者。不要求你已经会 Java、数据库或 Linux。
 
-## 先解决「我该从哪里学」
+我们围绕一个任务管理系统学习：先看页面发出的请求怎样到达后端，再写出接口、保存任务、加入登录，最后学习部署和排错。新工具在需要它的时候再介绍，不必先装齐一套中间件。
 
-你只需要有 JavaScript / TypeScript、调用接口和使用终端的经验；**不假设你已经会网络、Java、Linux 或数据库**。
+## 第一次来，按 A → B → C → D → E 阅读
 
-- **第一次来**：从下面的阶段 A 开始，按表内顺序走。文件名里的旧编号只是稳定地址，**不是阅读顺序**。
-- **同事说了个听不懂的词**：先查 [场景术语词典](./90-glossary)，想知道为什么需要它，再看 [后端功能地图](./39-backend-feature-map)。
-- **想马上动手**：直接做 [第一个可运行的任务 API](./07-build-a-crud-api)，卡在哪里再补前置，不必等全部读完。
-- **已经在联调故障**：从 [请求链路](./03-request-lifecycle) 和 [日志与排错](./26-reading-logs) 开始；如果卡在「连 VPN、上堡垒机、申请连库」，先读 [公司内网与访问权限](./22c-private-network-and-access)。
+下面的表和侧边栏是同一个顺序。文件名里的数字保留了旧地址，不是阅读顺序。
 
-![从网络到上线的后端学习路线，每阶段都有一个可验收的产物](/backend-guide/core-learning-map.svg)
+![先看请求，再写接口、处理数据和权限，最后扩展功能并学习部署](/backend-guide/core-learning-map.svg)
 
-## 全程围绕同一种任务业务
+### A · 先看懂请求是怎样走的
 
-主线是 **Java 17 + Spring Boot 3.x + SQL 的单体 `task-api`**，监听 `8080`，接口以 `/api/tasks` 开头。
+| 顺序 | 这一篇回答什么 |
+| --- | --- |
+| A1 | [一个新增任务按钮，为什么需要后端？](./01-backend-mindset) |
+| A2 | [任务应用、服务器和数据库，分别运行在哪里？](./02-architecture-overview) |
+| A3 | [浏览器怎样用域名、IP 和端口找到应用？](./22-networking-for-backend) |
+| A4 | [HTTP 请求里有什么，浏览器又做了哪些限制？](./22a-http-and-browser) |
+| A5 | [请求为什么有时先经过代理或网关？](./22b-proxy-and-discovery) |
+| A6 | [在家怎样通过 VPN、堡垒机登录公司服务器？](./22c-private-network-and-access) |
+| A7 | [新增任务的请求，到达 Spring 以后怎样处理？](./03-request-lifecycle) |
 
-1. 第一版用 **H2 内存数据库**：不用先装任何中间件，就能跑完整的 HTTP → Service → SQL。
-2. 理解数据建模后迁移到 **MySQL**：学习持久化、索引、事务和数据库迁移。
-3. 再增加登录、数据归属、导出任务、附件等真实能力；**需要缓存才加 Redis，需要解耦才加 MQ**。
-4. 用 Docker Compose 验证部署，不把 Kubernetes 当作入门门槛。
+这一阶段先理解过程，不要求立即写 Java。接下来再把图中的处理步骤变成代码。
 
-::: tip 示例和练习的边界
-[第一版 API](./07-build-a-crud-api) 和 [Session 登录实验](./32a-session-login-lab) 都有独立可运行源码和测试，围绕相同任务接口。第一版无登录、侧重 CRUD / MySQL；登录变体单独用 H2，侧重 Cookie / CSRF / 身份与归属，避免一口气集成全部组件。两者**只用于本机教学，不是完整生产项目**。将安全与 MySQL 合并、加入缓存 / 导出及真实上线仍是扩展作业，不冒充已经交付的完整业务系统。
-:::
+### B · 跑通一个任务接口
 
-## 阶段 A · 看清一条请求（先学，不跳过）
+| 顺序 | 这一篇做什么 |
+| --- | --- |
+| B1 | [读懂任务代码里用到的 Java](./05-java-crash-course) |
+| B2 | [弄清 Spring 怎样创建对象、传入依赖](./06-spring-boot-ioc-di) |
+| B3 | [打开项目，沿一个接口找到三层代码](./04-three-layer-and-structure) |
+| B4 | [启动配套工程，完成任务增删改查](./07-build-a-crud-api) |
+| B5 | [把路径、输入、状态码写成明确的接口约定](./34-api-design) |
 
-| 顺序 | 学习内容 | 学完必须能做到 |
-| --- | --- | --- |
-| A1 | [前端经验怎么迁移，后端究竟负责什么](./01-backend-mindset) | 区分体验校验、权限边界、持久状态与并发 |
-| A2 | [系统地图：进程、服务器、数据库和中间件](./02-architecture-overview) | 画出最小单体系统，不把工具名当架构 |
-| A3 | [网络：IP、端口、DNS、TCP、TLS](./22-networking-for-backend) | 解释 localhost / 0.0.0.0，分清解析失败与连接失败 |
-| A4 | [HTTP 与浏览器：报文、CORS、Cookie、缓存](./22a-http-and-browser) | 读懂请求响应，解释 curl 通但浏览器失败 |
-| A5 | [代理、网关、负载均衡与服务发现](./22b-proxy-and-discovery) | 说清 Nginx、CDN、网关各站在哪一跳 |
-| A6 | [公司内网、堡垒机、跳板机与访问权限](./22c-private-network-and-access) | 分清 VPN、连接中转、资产授权与系统 / 数据库权限 |
-| A7 | [请求进入 Spring 之后](./03-request-lifecycle) | 从入口跟到 SQL，知道异常和超时在哪产生 |
+先用 H2 内存数据库，免去安装数据库的步骤。跑通以后，再讨论长期保存和多人使用。
 
-**过关产物**：自己画出「点击新增任务 → 数据库提交 → 页面显示结果」的图，并标出 DNS、HTTP、进程和数据的位置。
+### C · 让数据和权限符合业务要求
 
-## 阶段 B · 写出第一个接口（只学够用的语言）
+| 顺序 | 这一篇做什么 |
+| --- | --- |
+| C1 | [设计任务表，用 SQL 查询，再看索引怎样帮助查询](./10-sql-and-indexes) |
+| C2 | [观察回滚，以及两个请求同时修改数据的结果](./11-transactions-consistency) |
+| C3 | [确认用户身份，并检查任务属于谁](./32-security) |
+| C4 | [运行独立的 Session 登录实验，验证两名用户互相隔离](./32a-session-login-lab) |
+| C5 | [用自动测试检查正常、错误和越权请求](./35-testing) |
 
-| 顺序 | 学习内容 | 学完必须能做到 |
-| --- | --- | --- |
-| B1 | [Java 最小知识集](./05-java-crash-course) | 读懂 class、record、List、Optional、异常 |
-| B2 | [Spring、Bean 和构造器注入](./06-spring-boot-ioc-di) | 说明对象谁创建、为什么注入、单例为何不能存用户状态 |
-| B3 | [三层分工与陌生工程阅读方法](./04-three-layer-and-structure) | 找到入口、配置、Controller、Service、Repository |
-| B4 | [动手：可运行任务 CRUD](./07-build-a-crud-api) | 用 curl 完成增查改删，验证 400 / 404 / 405 / 415 |
-| B5 | [接口契约：分页、错误、版本与幂等](./34-api-design) | 给前端一份可以据此联调的接口文档 |
+第一版“能读写任务”，不代表已经适合多人使用。这个阶段就是补上这些差别。
 
-[注解速查](./08-annotations-cheatsheet) 和 [Java 专题](/back-end/java/01-environment) 是随手字典，**不用先逐篇读完**。
+### D · 有了具体需求，再认识扩展工具
 
-## 阶段 C · 把数据与权限做正确（核心必修）
+| 顺序 | 这一篇回答什么 |
+| --- | --- |
+| D1 | [附件、导出、调度、支付回调这些需求，后端分别要做什么？](./39-backend-feature-map) |
+| D2 | [什么时候需要 Redis，缓存和限流怎样工作？](./12-redis-in-practice) |
+| D3 | [耗时任务怎样放到后台，为什么消息会重试？](./33-mq-reliability) |
+| D4 | [应用为什么会等数据库连接，池大小怎样影响它？](./13-connection-pools) |
 
-| 顺序 | 学习内容 | 学完必须能做到 |
-| --- | --- | --- |
-| C1 | [数据建模、SQL 和索引](./10-sql-and-indexes) | 设计用户与任务表，用参数化 SQL、约束和 EXPLAIN |
-| C2 | [事务、并发更新与一致性](./11-transactions-consistency) | 复现回滚和两个请求覆盖，区分事务与幂等 |
-| C3 | [登录、Session / JWT 和授权](./32-security) | 不信任 userId，验证用户 A 不能操作 B 的任务 |
-| C4 | [动手：Session 登录、CSRF 与 A/B 数据隔离](./32a-session-login-lab) | 用真实登录会话完成安全纵切，不只背 JWT 名词 |
-| C5 | [后端测试](./35-testing) | 运行自动测试，覆盖失败、边界和越权，而不只点成功路径 |
+这里先理解用途。任务量很小时，可以先用数据库完成工作，不必为了练习把所有组件都接上。
 
-[SQL vs NoSQL](./09-sql-vs-nosql) 用于选型理解；[数据库专题](/back-end/database/index) 用于补 SQL / JDBC / ORM 细节。**初学不需要把 MySQL、MongoDB、Redis 都接上。**
+### E · 学习怎样部署，以及出错时从哪里查
 
-## 阶段 D · 听懂真实需求（先懂用途，再决定要不要用）
+| 顺序 | 这一篇做什么 |
+| --- | --- |
+| E1 | [在 Linux 中找进程、看端口、检查文件权限](./21-linux-server-essentials) |
+| E2 | [区分开发与部署环境，配置地址和密钥](./25-config-and-env) |
+| E3 | [用 Docker Compose 运行应用和 MySQL](./23-docker-in-practice) |
+| E4 | [从请求 ID 和错误日志查一次故障](./26-reading-logs) |
+| E5 | [把前面学过的功能组合起来，检查部署和恢复](./38-capstone-feature-to-prod) |
 
-| 顺序 | 学习内容 | 学完必须能做到 |
-| --- | --- | --- |
-| D1 | [功能地图：上传、导出、搜索、调度、支付回调等](./39-backend-feature-map) | 把同事说的名词翻译成具体需求、实现和失败边界 |
-| D2 | [Redis：缓存、限流与锁的边界](./12-redis-in-practice) | 解释缓存不是事实源，画出缓存失效时序 |
-| D3 | [异步任务与 MQ 可靠性](./33-mq-reliability) | 设计导出任务状态，解释重复消费和 outbox |
-| D4 | [连接池与资源上限](./13-connection-pools) | 区分等线程、等连接和等 SQL，不盲目加池大小 |
+学习速度不用按周硬凑。每次完成一个小步骤，卡住再补对应知识，具体见 [怎样安排学习](./93-learning-path)。
 
-Redis、MQ 的**认知必学，集成可后置**。任务量小先用数据库任务表，不为堆技术引入组件。
+## 配套源码有两份，不要混着运行
 
-## 阶段 E · 跑到服务器上，并知道出错怎么查
+[第一版任务 API](./07-build-a-crud-api) 使用 Java 17、Spring Boot 3.5.7 和 H2，带 7 个测试，适合开始练 CRUD；它也提供切换 MySQL 的配置，但没有登录。
 
-| 顺序 | 学习内容 | 学完必须能做到 |
-| --- | --- | --- |
-| E1 | [Linux 的进程、目录、权限和端口](./21-linux-server-essentials) | 找进程、看监听、按权限查看日志 |
-| E2 | [配置与环境](./25-config-and-env) | 不把 localhost、密码和生产地址写死 |
-| E3 | [Docker 与 Compose：部署单体和 MySQL](./23-docker-in-practice) | 分清容器端口 / 宿主端口 / 数据卷，重启数据不丢 |
-| E4 | [日志、请求 ID 与第一次故障定位](./26-reading-logs) | 用请求 ID 找到根因，保护敏感信息 |
-| E5 | [综合实战：从需求到验收](./38-capstone-feature-to-prod) | 完成安全、持久化、部署、恢复的交付清单 |
+[Session 登录实验](./32a-session-login-lab) 是另一份独立工程，带 16 个测试，专门观察登录 Cookie、CSRF 和用户隔离。它仍用 H2，不是在第一版目录里继续覆盖文件。
 
-**第一轮终点是能交付一个小单体，不是会背微服务面试题。** 每阶段时间参考 [学习节奏与检查点](./93-learning-path)。
+两者都只用于本机教学。把安全、MySQL、备份和其他扩展组合成一个可部署项目，是后面的练习，不是下载包已经具备的完整生产能力。
 
-## 选修资料：第一轮不要逐章通读
+## 不认识词，或需要深入时再查
 
-保留这些内容是为了遇到真实问题能查，而不是要求入门先学完：
+- **遇到一个生词**：查 [170 条场景词典](./90-glossary)，再进入对应章节。
+- **忘了注解或命令**：查 [注解](./08-annotations-cheatsheet)、[命令卡](./91-command-cheatsheet)。
+- **需要补语法和存储用法**：查 [Java 专题](/back-end/java/01-environment)、[SQL / NoSQL](./09-sql-vs-nosql)、[数据库专题](/back-end/database/index)。
+- **要深入并发**：按 [多线程](./14-single-thread-to-multithread) → [线程池](./15-thread-pools-executor) → [线程安全](./16-thread-safety-locks) → [异步编程](./17-async-programming) 阅读。
+- **遇到内存问题**：查 [JVM 内存](./18-jvm-memory-model)、[GC](./19-garbage-collection)、[OOM](./20-oom-memory-leak)。
+- **遇到线上故障或容量问题**：查 [排查方法](./27-troubleshooting-methodology)、[故障手册](./28-troubleshooting-playbook)、[诊断工具](./29-diagnostic-toolbox)、[可观测性](./30-observability)、[性能与容量](./31-performance-concurrency)。
+- **确实要管理更复杂的交付**：再看 [Kubernetes](./24-kubernetes-in-practice)、[CI/CD](./36-cicd-deployment)。
+- **想找额外练习或官方说明**：查 [练习集](./37-hands-on-exercises)、[学习资源](./92-learning-resources)。
 
-- **并发与资源**：[多线程](./14-single-thread-to-multithread) → [线程池](./15-thread-pools-executor) → [线程安全与锁](./16-thread-safety-locks) → [Java 异步](./17-async-programming)。Node / 浏览器也有异步竞态，不能因为单线程就忽略。
-- **JVM 深入**：[内存](./18-jvm-memory-model)、[GC](./19-garbage-collection)、[OOM](./20-oom-memory-leak)。先有具体内存问题，再学诊断，不阻塞第一个接口。
-- **线上专题**：[排查方法](./27-troubleshooting-methodology)、[排查手册](./28-troubleshooting-playbook)、[诊断工具](./29-diagnostic-toolbox)、[可观测性](./30-observability)、[性能](./31-performance-concurrency)。
-- **规模化交付**：[Kubernetes](./24-kubernetes-in-practice)、[CI/CD](./36-cicd-deployment)。
-- **练习与查阅**：[练习集](./37-hands-on-exercises)、[术语词典](./90-glossary)、[命令卡](./91-command-cheatsheet)、[官方资源](./92-learning-resources)。
+选修里的部分代码是独立的场景片段，不是任务工程的依赖。各篇会说明使用条件，不需要为了读完它们去寻找不存在的微服务项目。
 
-::: info 如何理解保留专题里的旧示例
-部分选修专题保留了 AI 生图的 `svc-*` / `cpt-*` / `RtData` 示例，用来展示多进程和运行时故障；它们是**解释片段，不是本仓库存在的完整微服务源码，也不是主线项目的依赖**。先把词换回「调用方、被调用方、统一响应」理解，不需要去找一个不存在的工程。
-:::
-
-## 这次整理删掉 / 后置了什么
-
-- 删除旧首页、旧 8 Part 时间表和独立 Spring 路线中重复、相互冲突的学习安排，统一到本页；旧地址留一个短入口，不打断收藏链接。
-- 删除主线中对不存在的 AI 微服务代码、共享异常类和认证网关的依赖，替换为可自行运行的单体例子。
-- 重写把前端竞态说成不存在、把 504 说成上游一定收到请求、把缓存和锁说成绝对保证等误导表达。
-- 将 JVM 调优、Kubernetes、微服务治理后置，不删仍有查阅价值的 Java / 数据库 / 运维专题。
-
-**现在就开始：[A1 · 后端到底负责什么](./01-backend-mindset)。**
+从 [A1 · 为什么需要后端](./01-backend-mindset) 开始。

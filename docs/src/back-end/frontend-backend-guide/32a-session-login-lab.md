@@ -7,17 +7,17 @@ next:
   link: "/back-end/frontend-backend-guide/35-testing"
 ---
 
-# Session 登录实验：从“所有人共用任务”到可信用户归属
+# Session 登录实验：Alice 登录以后，为什么仍不能操作 Bob 的任务
 
-> 场景：初版任务 API 会接受任何人的请求。现在让 alice、bob 登录后只看到自己的任务，并验证猜 ID、伪造 uid、缺少 CSRF token 都不能绕过保护。
+初版任务 API 没有区分用户，谁调用接口，看到的都是同一批任务。现在我们启动一个独立的安全实验，让 Alice 和 Bob 分别登录、各自创建任务，再让 Bob 拿着合法会话访问 Alice 的任务，看看后台会怎样处理。
 
-前置：[可运行 CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api)、[Cookie、SameSite 与 CSRF](/back-end/frontend-backend-guide/22a-http-and-browser)、[安全基础](/back-end/frontend-backend-guide/32-security)。**本篇是独立的本机 H2 安全变体，不要修改或同时启动初始示例。**
+先读过 [可运行 CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api)、[Cookie、SameSite 与 CSRF](/back-end/frontend-backend-guide/22a-http-and-browser) 和 [安全基础](/back-end/frontend-backend-guide/32-security)，就可以按下面顺序操作。不需要 JWT、Docker、MySQL 或微服务。
 
-学完能做什么：跑通“取 CSRF → 表单登录 → 更新 Cookie → 重取 CSRF → 操作自己的任务 → 退出”，并用两位用户验证资源授权；不需要 JWT、Docker、MySQL 或微服务。
+**本篇使用独立的本机 H2 安全变体。初版工程继续保留，不要把两套配置混在一起，也不要同时启动它们占用同一端口。**
 
-## 1. 获取工程，先确认真实边界
+## 1. 先启动带登录保护的实验工程
 
-在线读者可以 [下载完整 Session 实验源码](/backend-guide/session-lab.zip)，解压后进入 `backend-session-lab`；已有本仓库时按下面目录进入，不重复下载。要求 JDK 17、Maven 3.6.3+；后面的 JSON 提取小工具需要 Python 3。首次 Maven 解析依赖需联网。
+在线读者可以 [下载完整 Session 实验源码](/backend-guide/session-lab.zip)，解压后进入 `backend-session-lab`；已有仓库则直接使用下面的目录。先准备 JDK 17、Maven 3.6.3+ 和 Python 3，后者用于从响应 JSON 中提取 token 与任务 ID。首次 Maven 解析依赖需要联网。
 
 ```bash
 cd examples/backend-session-lab
@@ -28,16 +28,16 @@ mvn test
 mvn spring-boot:run
 ```
 
-默认只监听 `127.0.0.1:8080`，不要改成公网监听。若初版占用 8080，先在它的终端 Ctrl+C；不要随意杀掉其他进程。
+服务默认只监听 `127.0.0.1:8080`。如果初版正在使用 8080，先回它的终端按 Ctrl+C，再启动本工程，不随意结束其他进程。这里使用公开账号和本机配置，**不要改成公网监听**。
 
 | 演示用户 | 公开口令 |
 | --- | --- |
 | alice | `alice-local-demo-17` |
 | bob | `bob-local-demo-17` |
 
-**这些口令公开、不可生产使用。** Spring Security 6 通过 `PasswordEncoder` 的 BCrypt 哈希校验口令；哈希不能让公开口令变得安全。用户只在内存定义，没有注册、改密、找回、MFA、账号封禁或完整生产密码策略。
+Spring Security 6 使用 `PasswordEncoder` 和 BCrypt 校验口令。账号只在内存中定义，口令也公开，不能拿去生产；保存成哈希不会让公开口令重新变成秘密。本实验暂不提供注册、改密、找回、MFA、封禁和完整密码策略。
 
-真实文件按以下顺序阅读，均在独立目录内：
+先让服务保持运行，后面另开终端发请求。需要对应源码时，可以沿着安全配置、认证入口、任务接口、数据库访问的顺序阅读：
 
 ```text
 src/main/java/dev/learning/sessionlab/
@@ -54,19 +54,21 @@ src/main/resources/schema.sql  # H2 表与归属索引
 src/test/java/dev/learning/sessionlab/SessionSecurityTest.java
 ```
 
-## 2. 先理解 Cookie 与 CSRF 各证明什么
+## 2. 登录之前，先分清要保存的两样东西
 
-Cookie 中的 JSESSIONID 关联服务端 Session，认证身份保存在服务端，不是客户端声称的 uid。CSRF token 则校验这次变更请求是否持有同一 Session 的防伪令牌，**它本身不是登录凭据**。
+本实验的 Cookie 中有 JSESSIONID，服务器用它找到 Session。登录身份保存在服务器，不由请求里的 uid 决定。CSRF token 则随同一个 Session 保存，用于校验变更请求携带的防伪材料；只拿到 token，还没有通过用户名和密码认证。
 
-- `GET /api/auth/csrf` 公开返回 `{token,headerName,parameterName}`，读取 token 时创建 Session；响应禁止缓存。
-- `POST /api/auth/login` 接受 **表单** username/password，不是 JSON；登录也必须带 CSRF。
-- 登录成功返回 `200 {"username":"alice"}`，改变 Session ID 并清除旧 CSRF token；必须保存新 Cookie，再取新 token。
-- POST / PUT / DELETE / logout 需要 Cookie 与有效 CSRF；GET 不应修改业务状态。
-- 未登录查任务返回 JSON 401，不跳 HTML 登录页；CSRF 失败返回 JSON 403。未登录的变更请求也可能先因缺 CSRF 得到 403，不是所有失败都走同一顺序。
+因此，第一次先访问公开的 `GET /api/auth/csrf`。接口返回 `{token,headerName,parameterName}`，加载 token 时会创建 Session，并禁止缓存响应。接着把 Cookie 和 token 一起带到 `POST /api/auth/login`，以**表单**提交 username 和 password，而不是发 JSON。
 
-## 3. 准备隔离 Cookie jar
+成功登录后，框架会更换 Session ID，并清除登录前的 CSRF token。我们需要先保存响应中的新 Cookie，再请求一次 CSRF 接口，后面的 POST、PUT、DELETE 和退出才能使用新 token。这里多取一次不是重复劳动，而是会话安全状态已经变化。
 
-另开终端，下面所有请求始终使用 `127.0.0.1`，不要中途换成 localhost，否则 Cookie 主机范围可能不一致。若本机代理干扰，可为这些本地 curl 单次增加 `--noproxy '*'`。
+未登录的查询返回 JSON 401，不跳 HTML 登录页。CSRF 失败返回 JSON 403；变更请求可能先过 CSRF 检查，因此没登录又没 token 时，也可能先得到 403。后面按每一步的预期结果判断，不把所有拒绝都当成同一种错误。
+
+## 3. 给 Alice 和 Bob 分别准备 Cookie 文件
+
+另开终端，下面代码在同一个终端按顺序执行，变量需要一直保留。两个用户各用一份 Cookie jar，也就是保存 Cookie 的文件，避免后一次登录覆盖前一个人的会话。
+
+地址始终使用 `127.0.0.1`，不要中途改为 localhost，它们的 Cookie 主机范围可能不同。如果本机代理干扰，可以给这些本地 curl 单次增加 `--noproxy '*'`。
 
 ```bash
 BASE='http://127.0.0.1:8080'
@@ -80,9 +82,13 @@ field() {
 curl -i "$BASE/api/tasks"
 ```
 
-预期最后一次请求为 `401`，正文有 `AUTHENTICATION_REQUIRED` 与 requestId，没有跳登录页的 Location。临时目录中的 Cookie 和 token 都是登录材料，勿提交 Git 或分享；`curl -i` / `-v` 还可能打印 Set-Cookie 等敏感输出，分享前脱敏。
+最后的请求没有会话，应得到 `401`，正文包含 `AUTHENTICATION_REQUIRED` 和 requestId，也没有跳转登录页的 Location。服务正常运行却拒绝这次请求，正是我们想看到的起点。
 
-## 4. alice：先取 token，再登录，再取新 token
+`LAB_DIR` 是本机临时目录，umask 限制新文件权限。接下来里面会保存 Cookie 和 token，把它们当作登录材料，不提交或分享。`curl -i`、`-v` 也可能打印 Set-Cookie，求助时先脱敏。
+
+## 4. Alice：用登录前的 token 登录，再换成登录后的 token
+
+先取得匿名 Session 的 Cookie 和 token，再带着它们提交登录表单：
 
 ```bash
 curl -fsS -c "$ALICE_JAR" "$BASE/api/auth/csrf" -o "$LAB_DIR/alice-csrf.json"
@@ -94,7 +100,9 @@ curl -i -b "$ALICE_JAR" -c "$ALICE_JAR" \
   "$BASE/api/auth/login"
 ```
 
-预期 `200` 和 username=alice。`-b` 读取已有 Cookie，`-c` 保存响应 Cookie；**登录时两者都要有**，否则可能丢掉会话 ID 更新。错误密码应为 `401 BAD_CREDENTIALS`，但漏 token 会先是 `403 CSRF_REJECTED`。
+登录应返回 `200`，正文 username 为 alice。这里 `-b` 负责发送已有 Cookie，`-c` 负责保存响应更新后的 Cookie，**两者缺一不可**。只发送不保存，就可能继续拿旧会话 ID 发后续请求。
+
+如果带着正确 CSRF 却输错密码，应得到 `401 BAD_CREDENTIALS`；如果漏了 token，则可能先被 CSRF 拒绝，得到 `403 CSRF_REJECTED`。成功后继续取新 token：
 
 ```bash
 curl -fsS -b "$ALICE_JAR" -c "$ALICE_JAR" \
@@ -102,9 +110,11 @@ curl -fsS -b "$ALICE_JAR" -c "$ALICE_JAR" \
 ALICE_TOKEN=$(field "$LAB_DIR/alice-csrf.json" token)
 ```
 
-从现在起用 ALICE_TOKEN，不再用登录前的 ALICE_PRE。不要靠关掉 CSRF 让旧 token “继续可用”。
+这次把结果保存为 ALICE_TOKEN。后续写请求使用它，登录前的 ALICE_PRE 已经作废；如果这里失败，应检查 Cookie 是否保存和新 token 是否取到，不关闭 CSRF 来绕过问题。
 
-## 5. 创建、读取、更新自己的任务
+## 5. 用 Alice 的会话创建并修改任务
+
+现在服务器已经知道请求者是 Alice。创建响应会返回真实 UUID，下面提取它作为 TASK_ID，再查询、翻页和更新，不手工猜一个 ID：
 
 ```bash
 curl -sS -b "$ALICE_JAR" -H "$HEADER: $ALICE_TOKEN" \
@@ -119,9 +129,13 @@ curl -i -X PUT -b "$ALICE_JAR" -H "$HEADER: $ALICE_TOKEN" \
   "$BASE/api/tasks/$TASK_ID"
 ```
 
-预期依次为 `201 → 200 → 200 → 200`。创建的 UUID 写入 TASK_ID，Location 保存在 create.headers；响应仍是 id/title/status/createdAt，不暴露 owner。状态只有 TODO/DOING/DONE；分页从 0 开始，size 为 1～100，page 上限 10000，总数也只属于当前用户。
+这四次请求应依次是 `201 → 200 → 200 → 200`。创建响应的 Location 另存于 create.headers，资源正文仍只有 id、title、status、createdAt，不暴露 owner。虽然请求里没有 owner，数据库记录已由服务端 principal 确定为 Alice 所有。
 
-## 6. bob：另一份 Cookie jar，验证越权与列表隔离
+更新使用 TODO、DOING、DONE 三个字符串状态；分页从 0 开始，size 为 1～100，page 不超过 10000。列表与 total 都应只统计当前用户，下一步用 Bob 检查这一点。
+
+## 6. Bob 已经登录，仍不能访问 Alice 的任务
+
+使用 Bob 自己的 Cookie 文件，同样完成登录和 token 更新。然后拿刚才 Alice 的 TASK_ID，分别尝试读取、修改和删除：
 
 ```bash
 curl -fsS -c "$BOB_JAR" "$BASE/api/auth/csrf" -o "$LAB_DIR/bob-csrf.json"
@@ -139,7 +153,9 @@ curl -i -X PUT -b "$BOB_JAR" -H "$HEADER: $BOB_TOKEN" \
 curl -i -X DELETE -b "$BOB_JAR" -H "$HEADER: $BOB_TOKEN" "$BASE/api/tasks/$TASK_ID"
 ```
 
-登录为 200；后三次均应 `404 TASK_NOT_FOUND`，Alice 的标题与 DONE 状态不变。uid 头不是身份；JSON ownerId、owner_id 和查询参数也不能改变可信 principal。仓储直接用 `WHERE owner_id=? AND id=?`，不是“先查出所有任务，再让前端隐藏”。
+Bob 登录返回 200，但后三次都应是 `404 TASK_NOT_FOUND`。Bob 的 Cookie 和 CSRF token 都有效，失败的原因是任务不属于他。即使在头里写 `uid: alice`，也改变不了经过认证的 principal；JSON 中的 ownerId、owner_id 和查询参数同样不能替换身份。
+
+仓储把 principal 对应的用户写进 `WHERE owner_id=? AND id=?`。查不到可见记录就返回 404，写不匹配也不修改数据，Alice 的标题和 DONE 状态应保持不变。接着让 Bob 创建自己的任务，再分别查列表：
 
 ```bash
 curl -i -b "$BOB_JAR" -H "$HEADER: $BOB_TOKEN" \
@@ -148,9 +164,11 @@ curl -i -b "$BOB_JAR" "$BASE/api/tasks?ownerId=alice"
 curl -i -b "$ALICE_JAR" "$BASE/api/tasks"
 ```
 
-预期创建 201，两份列表各为自己的 1 条任务、total=1。即使 Bob 传 ownerId=alice，也不会看到 Alice 的任务。实验以未提前创建其他任务为前提，重跑后数量增加属于预期。
+创建应为 201。首次按本篇执行时，两份列表各有自己的 1 条任务，total=1；Bob 带 ownerId=alice，也只得到 Bob 的那条。既要看 items，也要看 total，不能只把列表隐藏了，却通过总数泄露别人的数据。重跑时已创建的任务还在，数量增加是正常现象。
 
-## 7. 验证 CSRF、删除与退出
+## 7. 回到 Alice，检查缺 token 和退出后的请求
+
+Alice 仍处于登录状态。先省略 token 创建任务，再带正确 token 删除自己的任务，最后退出并查询。这样能把 CSRF 拒绝、成功操作和会话失效区分开：
 
 ```bash
 # 有 Cookie 但不带 CSRF，不能创建；预期 403，列表不增加
@@ -164,35 +182,36 @@ curl -i -X POST -b "$ALICE_JAR" -c "$ALICE_JAR" \
 curl -i -b "$ALICE_JAR" "$BASE/api/tasks"
 ```
 
-预期 `403 → 204 → 204 → 401`。退出使服务端 Session 失效，不只是删除浏览器 Cookie；Bob 的会话不受影响。安全变体中再次删除同一 ID 返回 404，与初版重复删除 204 不同：不存在与他人资源统一不可见，状态效果仍幂等。
+预期是 `403 → 204 → 204 → 401`。第一步没增加任务，第二步删除成功且无正文；退出让服务端 Session 失效，同时用 `-c` 保存清除 Cookie 的响应，最后才会访问失败。Bob 使用另一份会话，不受影响。
 
-## 8. 自动测试证明了什么
+安全变体再次删除同一 ID 返回 404，初版则重复返回 204。这里刻意统一隐藏不存在和他人资源，重复删除的状态效果仍然相同，不因状态码变化而失去幂等性。
 
-`mvn test` 运行真实的 16 个集成测试方法；它们通过取 token 和表单登录进入过滤器链，不使用伪身份注解或 CSRF 测试捷径。此次编写时已在隔离 JDK 17 实际执行，结果为 **16 tests、0 failures、0 errors、0 skipped**。
+## 8. 把刚才的过程交给自动测试反复检查
 
-| 检查范围 | 关键证据 |
+工程已有 **16 个集成测试方法**，通过真正的取 token 和表单登录走过过滤器链，没有用伪身份注解或 CSRF 测试捷径。正常运行 `mvn test` 时，应看到 **16 tests、0 failures、0 errors、0 skipped**。方法数量与手工请求次数不是一回事：一个方法可能检查多种输入和多次请求。
+
+测试除了检查响应，也会查数据库和会话状态。比如 Bob 越权时不仅要返回 404，还要确保 Alice 的记录没变；退出时不仅要返回 204，还要检查旧 Session 已 invalid，任务并未被退出操作删除。
+
+| 检查范围 | 测试检查的具体结果 |
 | --- | --- |
-| 登录边界 | 未登录 JSON401、错误密码 / 未知用户401、缺 CSRF 的登录403、BCrypt校验 |
-| Session 与 CSRF | 登录换ID，旧token拒绝，新token可用；跨Session token拒绝；所有变更和退出不能漏token |
-| 用户归属 | 越权读写删404且数据不变；分页items与total均隔离；伪造uid和owner字段无效 |
-| 退出 | Session已invalid，Cookie删除，旧Session访问401，任务并非被退出操作删除 |
-| 原接口约束 | 严格JSON、数字枚举400；EM SPACE在strip后被拒绝且不写空标题；405保留Allow，415等语义不变 |
+| 登录 | 未登录得到 JSON 401，错误密码和未知用户为 401，缺 CSRF 登录为 403，密码由 BCrypt 验证 |
+| 会话与 CSRF | 登录更换 ID，旧 token 失败、新 token 成功，跨 Session token 失败，变更和退出都要 token |
+| 归属 | 越权读写删为 404 且数据不变，items 与 total 各自隔离，伪造 uid 和 owner 无效 |
+| 退出 | Session 失效、Cookie 清除，旧会话为 401，已有任务保留 |
+| 原接口规则 | 严格 JSON 和数字枚举为 400，EM SPACE 经 strip 后仍被拒绝，405 保留 Allow，415 等语义保留 |
 
-测试手工构造**不绑定外部数据库属性**的随机内存 H2 数据源，初始化和每次清表前校验 JDBC metadata URL 必须为本次 `jdbc:h2:mem:...`；不满足即停止，避免继承用户真实 DB 环境。不能删除这个保护，也不能把失败测试改成连生产库。
+运行测试还要确保清理不会触碰真实数据。两工程的安全做法一致：手工创建**不绑定外部数据库属性**的随机内存 H2 数据源，初始化和每次清表前，都验证 JDBC metadata URL 精确对应本次 `jdbc:h2:mem:...`；不满足就停止。不要移除这个保护，也不要把失败测试改成连接生产或共享业务库。
 
-MockMvc 不实际监听网络，不能证明浏览器 Cookie / SameSite、真实 TLS、反向代理或生产 MySQL 都可用。本轮维护另在临时本机端口启动实际 JAR，逐段执行了本页的 curl 流程，登录、双用户隔离、CSRF 拒绝和退出后的 17 个可见状态均符合预期；临时进程已停止。这仍不是浏览器或生产部署验证。
+MockMvc 没有实际监听网络，所以这些测试不覆盖浏览器的 Cookie 与 SameSite 行为、真实 TLS、代理或生产 MySQL。上面的 curl 流程另有 **17 个可见 HTTP 状态**供逐项核对，覆盖登录、双用户隔离、CSRF 拒绝和退出；它也只是本机 HTTP 检查，不是浏览器或生产部署验证。实际结果以自己运行时的响应和测试报告为准。
 
-## 9. 不要把实验当生产脚手架
+## 按需补充：接入真实产品之前，还缺什么
 
-- 数据与 Session 均在进程内存，重启后失效；没有持久用户、共享 Session、多设备退出或生产会话管理。
-- 演示用户名暂作 owner_id；真实系统应使用不可变用户 ID，设计账号生命周期及审计。
-- 本机 HTTP Cookie 为 HttpOnly、SameSite=Lax；生产 HTTPS 还要 Secure、可信代理、合适超时和风险评估。SameSite 不代替 CSRF，BCrypt 不代替强口令和登录限流。
-- 没有跨域放开；前端接入时优先同源入口，不要无条件回显 Origin。也没有 POST 幂等键、更新版本检查、备份恢复或依赖漏洞评估。
+本实验把数据和 Session 都放在进程内存，重启后失效；没有持久用户、共享 Session、多设备退出等会话管理。演示用户名暂时充当 owner_id，真实产品应换成不可变用户 ID，并设计账号生命周期和审计。
 
-## 自测与参考答案
+Cookie 使用适合本机 HTTP 的 HttpOnly、SameSite=Lax。生产 HTTPS 还要 Secure、可信代理、超时策略与风险评估；SameSite 只是配合 CSRF 使用，BCrypt 也还需要强口令和登录限流。前端接入时优先同源入口，本工程没有放开跨域，不无条件回显 Origin。
 
-1. 为什么登录前取了 token，登录后还要取？**登录刷新会话安全状态，旧 CSRF token 已清除；还必须保存 Session ID 更新后的 Cookie。**
-2. Bob 持有有效 Cookie 和 token，为什么改 Alice 任务仍失败？**认证与 CSRF 不等于资源授权，SQL 的 owner 条件由可信 principal 决定。**
-3. 把 uid 头写成 alice，或删除本地 Cookie，就能改变 / 撤销服务器身份吗？**前者不能伪造认证；后者只丢了本地材料，可靠退出要让服务端 Session 失效。**
+请求幂等键、更新版本检查、备份恢复和依赖漏洞评估也还没有提供。需要上线时，可回看 [安全基础](/back-end/frontend-backend-guide/32-security)，再在 [综合实战](/back-end/frontend-backend-guide/38-capstone-feature-to-prod) 中补齐，而不是把这两个公开用户直接换个密码就部署。
 
-继续 [测试方法](/back-end/frontend-backend-guide/35-testing) 扩展失败场景；回看 [安全基础](/back-end/frontend-backend-guide/32-security) 理解权限边界，再进入 [综合实战](/back-end/frontend-backend-guide/38-capstone-feature-to-prod)，补齐持久用户、生产认证策略与部署安全。
+现在可以用三个具体结果检查自己是否理解：登录后必须保存新 Cookie、重新取 token；Bob 的登录与 CSRF 都有效，仍被 owner 条件挡住；Alice 退出后，服务端旧会话真的失效。这三件事分别由不同位置负责。
+
+主线下一篇：[C5 · 后端测试与失败验收](/back-end/frontend-backend-guide/35-testing)。继续用 [测试方法](/back-end/frontend-backend-guide/35-testing) 看这些请求怎样变成可重复运行的检查。

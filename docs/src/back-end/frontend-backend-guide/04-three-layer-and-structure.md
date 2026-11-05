@@ -7,103 +7,89 @@ next:
   link: "/back-end/frontend-backend-guide/07-build-a-crud-api"
 ---
 
-# 三层分工与陌生工程阅读方法
+# 拿到一个后端项目，先从哪里看？
 
-> 学习目标：拿到一个 Spring 项目，知道从哪找入口、配置和接口，并知道业务代码应该放在哪一层。
+上一课知道了，Spring 会创建对象，并把它们需要的依赖连接起来。这次打开配套的任务项目，沿着一个新增接口，看看这些对象分别在做什么。
 
-前置：[Spring 与依赖注入](./06-spring-boot-ioc-di)。接下来使用 [任务 API 实验](./07-build-a-crud-api) 的真实工程，而不是假设你已经有一套微服务。
+## 1. 先确定项目怎样启动
 
-## 1. 三层不是三台服务器
+源码在仓库根目录的 `examples/backend-task-api`。先看它的说明和构建配置，确认需要 JDK 17、Maven，以及启动命令。再看应用配置，确认它监听本机 8080，默认使用 H2 内存数据库。
 
-![Controller 处理 HTTP，Service 处理业务与事务，Repository 处理 SQL，DTO 隔离输入输出](/backend-guide/core-layer-map.svg)
+这样做，是为了先知道自己正在读哪一个应用、它会连到哪里。不要一打开项目，就从工具类目录逐个看起。
 
-| 层 | 主要责任 | 不应该混进去 |
-| --- | --- | --- |
-| Controller | HTTP 参数、状态码、响应头、调用业务服务 | SQL 字符串、复杂业务流程 |
-| Service | 业务规则、授权、事务与用例编排 | 直接依赖 Servlet 请求对象、把用户状态存在单例字段 |
-| Repository / DAO / Mapper | 参数化 SQL、数据映射、存取操作 | 决定谁有权限、拼装 HTTP 响应 |
-
-这是帮助维护和测试的常见设计，不是语言铁律。小例子可以简化；复杂领域也可能用领域对象和应用服务分担规则。**Service 会通过 Repository 访问数据库，也必须理解事务和查询成本**，不能把「不写 SQL 细节」误读成「不用理解数据库」。
-
-Controller 比较接近 Next.js Route Handler / Express handler，而不是页面组件。Service 可类比抽出的业务函数，但不带 UI 生命周期。Repository 是服务器端的数据访问层，不是浏览器 axios 的完整等价物。
-
-## 2. 先认工程骨架，再沿调用链读
-
-配套源码在仓库根目录 `examples/backend-task-api`：
+下面只列出这次要看的部分：
 
 ```text
 backend-task-api/
-├── pom.xml                       # 版本、依赖、构建插件
-├── Dockerfile                    # 容器构建与启动
-├── compose.yml                   # 本地 MySQL + API 编排
+├── pom.xml                              # 依赖和构建方式
 └── src/
     ├── main/
     │   ├── java/dev/learning/tasks/
-    │   │   ├── TaskApplication.java      # main() 入口
-    │   │   ├── TaskController.java       # HTTP 路由
-    │   │   ├── TaskService.java          # 业务方法、事务
-    │   │   ├── TaskRepository.java       # JDBC / SQL
-    │   │   ├── TaskModels.java           # 请求、响应、枚举
-    │   │   ├── ApiException.java         # 业务异常
-    │   │   ├── ApiExceptionHandler.java  # HTTP 异常映射
-    │   │   └── RequestLogFilter.java     # 请求 ID 与访问日志
+    │   │   ├── TaskApplication.java      # 启动入口
+    │   │   ├── TaskController.java       # 接收 HTTP 请求
+    │   │   ├── TaskService.java          # 处理任务业务
+    │   │   ├── TaskRepository.java       # 读写数据库
+    │   │   ├── TaskModels.java           # 请求、响应和状态类型
+    │   │   └── ApiExceptionHandler.java  # 把异常转换成响应
     │   └── resources/
-    │       ├── application.yml          # 本地 H2 配置
-    │       ├── application-mysql.yml    # MySQL 练习配置
-    │       └── schema.sql               # 初始教学表
+    │       ├── application.yml          # 本地运行配置
+    │       └── schema.sql               # 教学数据表
     └── test/java/dev/learning/tasks/
-        └── TaskApiTest.java             # 自动 HTTP 集成测试
+        └── TaskApiTest.java             # 接口自动测试
 ```
 
-为减少第一个项目的文件跳转，相关类先放同一个包，数据类型放同一文件；工程大了可以按 `task/`、`user/` 业务模块，再在模块内分层。**目录名不决定职责，调用依赖才决定。**
+## 2. 从接口入口找到业务方法
 
-阅读顺序：
+我们要看的是 `POST /api/tasks`。先在 Controller 中找 `@PostMapping`，就能找到接收新增请求的方法。
 
-1. **README / 构建文件**：需要哪个 JDK，怎么启动，哪些外部依赖？
-2. **配置**：监听哪里、端口多少、连哪个库？不要先把密码复制到笔记。
-3. **Controller + DTO**：这个接口接什么、返什么、认证从哪来？
-4. **Service**：规则在哪、是否有事务、是否调外部服务？
-5. **Repository + schema**：实际 SQL、约束和索引是什么？
-6. **异常处理 + 测试**：错误如何返回，哪些行为有自动验证？
+它做的事情很短：接收并校验请求，调用 `service.create(request)`，然后把结果和 `201` 状态返回给前端。
 
-配置与异常处理是运行闭环的一部分，不建议一概跳过。没必要先从 `utils` 开始逐文件阅读。
+这里的 **Controller** 就是 HTTP 入口。如果你写过 Express handler 或 Next.js Route Handler，可以先把它理解为类似的入口位置，而不是页面组件。
 
-## 3. 为什么输入、存储、输出不全用一个对象
+接着沿着 `service.create(...)` 找到 Service。创建 ID、设置 TODO 初始状态、处理标题、保存任务，这些规则放在这里。将来要加“谁能创建”“哪些状态允许修改”，也要在后端业务处理中判断。
 
-以用户为例：
+这就是为什么不把所有逻辑都写在 Controller 里：同一个业务操作以后可能由另一个接口或后台任务调用，不需要重新复制一套 HTTP 处理代码。
 
-- `RegisterRequest` 允许提交密码，但不能提交 `role=ADMIN`。
-- 数据库存 `password_hash`，不存明文密码。
-- `UserResponse` 不返回明文密码，也不返回哈希。
+## 3. 再跟到真正写数据库的地方
 
-常见名字：
+Service 并不把标题直接拼进 SQL，而是调用 Repository。Repository 把任务字段作为参数交给 JDBC，再由数据库执行插入。
 
-| 名字 | 含义 | 注意 |
-| --- | --- | --- |
-| DTO | Data Transfer Object，传输对象 | 可以是请求也可以是响应，不只入参 |
-| Entity / PO | 持久化模型 | 不应默认直接暴露给客户端 |
-| VO / Response | 展示 / 响应对象 | VO 在领域建模里也可能指 Value Object，问清语境 |
-| BO / Domain Model | 业务对象 / 领域模型 | 不是每个 CRUD 都需要再加一层 |
-| DAO / Mapper / Repository | 数据访问相关抽象 | 不同框架用法有区别，不必为同一操作全建一套 |
+这样，一次新增就串起来了：
 
-## 4. Service 接口 + Impl 是否必需
+```text
+Controller 接请求 → Service 处理规则 → Repository 执行 SQL
+```
 
-不是。Spring 可以直接注入具体类。只有一个实现、没有抽象收益时，不必机械创建 `TaskService` 接口和 `TaskServiceImpl`。
+这就是常说的**三层分工**。本例的三层都在同一个 Java 进程里，之间是方法调用，不是三台服务器或三个微服务。
 
-当确实要表达边界、替换实现时再引入接口。单元测试也不强制每个类都要有接口；构造器注入就已经让依赖显式可替换。
+![Controller 接收 HTTP，Service 处理业务，Repository 访问数据库，请求和响应类型传递数据](/backend-guide/core-layer-map.svg)
 
-同理，统一响应壳 `{code,message,data}` 是团队契约，不是 Spring 强制要求。本课程成功直接返回资源，错误返回 `{code,message,requestId}`，同时保留 HTTP 状态。选修里的 `RtData` 只是另一种项目约定。
+Repository 集中处理 SQL 和数据映射，Service 仍要理解查询成本和事务。分层是为了让修改更容易定位，不是让每一层对其他部分一无所知。
 
-## 动手：在陌生项目里找到一个「纵切面」
+有些团队把数据访问相关的类叫 DAO 或 Mapper。看到这些名字时，先看它在做什么，不必给同一个数据库操作同时建三套类。
 
-选 `POST /api/tasks`，写下对应 Controller、请求 DTO、Service、Repository 和 SQL，最后找到一条测试。不要试图先理解全部工程。
+## 4. 请求和响应，为什么还要单独定义类型？
 
-**预期**：能在纸上写出一条清晰调用链，知道哪些类由 Spring 创建，哪些数据由请求创建。
+回头看新增接口。前端只提交标题，后端却会返回 ID、标题、状态和创建时间。如果把存储对象的所有字段都接受为输入，客户端就可能修改本来应该由服务器决定的值。
 
-## 自测与参考答案
+因此，输入和输出通常分别定义：请求类型写清允许提交什么，响应类型写清允许返回什么。这些传输数据的对象常被叫作 **DTO**。
 
-1. 三层意味着三个独立进程吗？**不意味着，本例都在同一个 Java 进程。**
-2. 改数据库类型只改 Repository 就一定够吗？**不一定，事务语义、查询模型、约束与业务能力可能一起变化。分层减少影响，不消除所有差异。**
-3. 每个 Service 必须有 Impl 吗？**不必，为实际替换和边界需求抽象，不为目录整齐增加间接层。**
+本项目把相关类型集中放在同一个文件，减少初学时的跳转。项目变大以后，也可以按任务、用户等功能分包，再在功能内部安排 Controller、Service 和 Repository。
 
-下一站：[动手运行任务 API](./07-build-a-crud-api)。
+你还可能看到 Entity、PO、VO 等名字。它们在团队中的约定不完全一样，先问“这个对象用于接收请求、执行业务，还是保存数据”，比只背缩写更有用。初次阅读也不用机械地为每个操作创建所有类型。
+
+## 5. 最后看错误和测试
+
+正常路径跟完以后，再看空标题或任务不存在时会发生什么。业务代码抛出相应异常，异常处理把它转换成前端能理解的 HTTP 状态和错误消息。
+
+然后打开测试，找到创建任务的那一条。测试会把请求真正交给应用处理，并检查返回状态和数据。这可以帮助你确认刚才读到的代码，实际约定了哪些行为。
+
+以后看陌生项目，也可以用同样的顺序：先确认怎样运行，再选一个接口，从 Controller 跟到 Service、Repository，最后看异常和测试。一次看明白一个功能，不用先理解全部目录。
+
+::: details 补充：Service 是否一定要有接口和 Impl？
+不一定。只有一个实现、暂时没有替换需要时，可以直接注入具体类。本课程就是这样做的。确实需要表达接口或替换实现时，再增加抽象。
+
+响应外面是否再包一层 `{code,message,data}`，也属于团队约定。本项目成功时直接返回任务，错误时返回 `{code,message,requestId}`，并保留 HTTP 状态。部分选修文章中的 `RtData` 是其他项目的写法，不是启动本项目所缺的依赖。
+:::
+
+下一篇：[运行任务 API](./07-build-a-crud-api)。这次不只看代码，而是实际发请求，观察这些类怎样一起工作。

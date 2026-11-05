@@ -1,423 +1,161 @@
 # CI/CD 与部署
 
-::: info 按需查阅 · 不属于第一轮必修
-本页保留旧版微服务 / JVM / 运维专题，`svc-*`、`cpt-*` 和 `RtData` 是解释场景，不是仓库中另有一套完整源码，也不代表主线依赖。第一次学习请返回 [五阶段主线](./index)；命令和输出需按自己的授权环境、系统与版本验证，不直接复制到生产。故障注入只在隔离实验进行，dump 与日志也可能包含敏感数据。
-:::
+你在本地改好了一个接口，测试也通过了。接下来怎样把这一次改动交给同事使用，并且知道发出去的究竟是哪一版？
 
+这篇就沿着一次 Java 应用的版本交付往下走：先检查代码，再生成可追溯的镜像，最后讨论平台如何更新、怎样确认结果和准备回退。本仓库本身是 VitePress 文档站，不包含下面的 Java 服务、镜像仓库或 Kubernetes 部署工程；示例没有实际触发 CI、推送镜像或部署生产。没有交付需求时，可以先跳过，沿 [五阶段主线](./index) 继续。
 
-> 你写前端时早就用过 CI/CD，只是可能没意识到。`git push` 到 main，GitHub Actions 自动跑构建、把 `dist/` 发到 GitHub Pages——这个仓库的 VitePress 文档站就是这么上线的（`.github/workflows/deploy.yml`）。你从没手动 `scp` 过文件，也没登录服务器解压过 tar 包，一切都是「提交即上线」。
->
-> 后端的 CI/CD 是同一个思想，只是链路更长：要编译 Java、跑测试、打 Docker 镜像、推镜像仓库、滚动更新 K8s、做健康检查。这一章把「从一次 `git push` 到 `svc-ai` 新版本在生产稳稳跑起来」这条流水线拆开讲透，并教你三种发布策略和怎么一键回滚。
+## 1. 先把“本地没问题”变成别人也能重复的检查
 
-本章是 Part 7「工程化与上线」的核心。它建立在前面几章之上：[第二十三章 Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice) 教你打镜像、[第二十四章 Kubernetes 实战](/back-end/frontend-backend-guide/24-kubernetes-in-practice) 教你部署和探针、[第三十五章 测试](/back-end/frontend-backend-guide/35-testing) 教你写测试——CI/CD 就是把这些动作**自动串成一条线**。
+如果每个人都在自己的电脑上打包，JDK、依赖、启动参数和测试数据可能不同。**CI（持续集成）**做的第一件事，是把团队约定的检查放到统一流程中，每次改动都按同样步骤执行。
 
-> 💡 **前端类比**：CI/CD 之于后端，就像 Vercel 之于你的 Next.js 项目。Vercel 帮你做的事（监听 push → 装依赖 → `next build` → 部署 → 给个预览 URL），后端要自己用 GitHub Actions + Docker + K8s 拼出来。后端同样有 PaaS / 托管容器等交付选择，不一定要自己管理集群。本文选择 Actions + Docker + Kubernetes 展示一类自管流水线，不代表所有后端项目都必须如此。
+例如检出代码、安装选定的 JDK、执行编译与测试。测试失败时停止后续交付，不继续把这一份产物发布出去。CI 通过只说明这些检查通过，不保证代码没有 bug；哪些风险能被发现，取决于测试和检查覆盖了什么。测试内容可配合 [测试](/back-end/frontend-backend-guide/35-testing) 设计。
 
----
+Java 中，`mvn package` 会经过常规的 `test` 阶段，但集成测试是否运行还取决于插件和生命周期配置。项目若把集成测试绑定到 `verify`，流水线就应执行到 `verify`，不能只凭 `BUILD SUCCESS` 宣称所有测试已完成。
 
-## 一、为什么需要 CI/CD：先看手动部署有多疼
+## 2. 先看一份不接生产的 CI 示例
 
-假设没有任何自动化，要把 `svc-ai` 的新版本发到生产，你得：
-
-```text
-1. 本地 mvn package 打出 jar             ← 忘了拉最新代码？打的是旧的
-2. scp 上传到服务器                       ← 传错机器？传到 test 了？
-3. ssh 上去 kill 掉旧进程                  ← kill 错 PID 把别的服务搞挂
-4. java -jar 启动新的                      ← 配置文件忘了换成 prod
-5. curl 试一下能不能访问                    ← 试着试着就忘了，直接下班
-```
-
-每一步都靠人脑记忆和手速，**任何一步错了都是生产事故**。而且只有你会发，你休假就没人敢动。这正是前端时代你不必操心的事——Vercel 把这些全吞了。
-
-CI/CD 把这条链路变成「**机器照着剧本执行，每次都一模一样**」：
-
-- **CI（Continuous Integration，持续集成）**：每次提交代码，自动拉代码、编译、跑测试。目标是**尽早发现集成问题**——别等到上线才发现你的改动让 `cpt-common` 的单测挂了。前端类比：你 PR 一提，Actions 自动跑 `tsc` + `vitest`，红了不让合。
-- **CD（Continuous Delivery / Deployment，持续交付 / 部署）**：CI 通过后，自动把产物（这里是 Docker 镜像）**打包并发布**。「交付」指自动打好镜像、推到仓库、等人点一下按钮上生产；「部署」指连这一下按钮都省了，测试过就直接上线。本仓库 VitePress 那套就是**持续部署**——push 到 main 直接发布，没有人工卡点。
-
-> ⚠️ 一句话区分：**CI 保证「代码是好的」，CD 保证「好的代码自动到了线上」。** 两者合起来，让「发布」从一件需要勇气的事，变成一件无聊到没人关注的事——这正是目标。
-
----
-
-## 二、一条完整流水线长什么样
-
-后端 CI/CD 流水线的标准阶段（Pipeline / Stage），从一次提交开始：
-
-```text
-   git push (main 分支)
-        │
-        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  CI 阶段（在 CI Runner 这台临时机器上跑）                          │
-│                                                                │
-│  ① Checkout 拉代码  ─▶ ② mvn package 编译  ─▶ ③ 跑单元/集成测试   │
-│         │                     │                     │          │
-│   git clone 仓库         产出 svc-ai.jar        测试红 → 立即停    │
-└──────────────────────────────────────────────────────────────┘
-        │  测试全绿
-        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  CD 阶段                                                        │
-│                                                                │
-│  ④ docker build 镜像 ─▶ ⑤ push 到镜像仓库 ─▶ ⑥ 部署到 K8s        │
-│       │                     │                      │          │
-│  打成 svc-ai:abc123    registry/svc-ai:abc123   kubectl 更新     │
-│                                                    │          │
-│                              ⑦ 健康检查（探针）等新 Pod Ready     │
-│                                     │                          │
-│                              全部 Ready → ✅ 发布成功            │
-│                              探针失败 → 自动停在旧版本，不掉线      │
-└──────────────────────────────────────────────────────────────┘
-```
-
-每个阶段都是「上一阶段成功才进下一阶段」，任何一环失败，流水线立刻变红、停下、通知你——绝不会把半成品送上生产。
-
-> 💡 **前端类比**：这七步和你熟悉的 `npm ci → tsc → vitest → next build → 上传 → CDN 生效` 是一一对应的。最大的新增项是 **④⑤ 打镜像 + 推仓库**——前端产物是静态文件直接丢 CDN，后端产物是一个**可运行的容器镜像**，必须先存进镜像仓库（Registry），K8s 再从那里拉。镜像仓库就是「后端版的 npm registry」，只不过存的不是 npm 包而是镜像。
-
----
-
-## 三、GitHub Actions 实战：构建并推送 Java 镜像
-
-我们以 `svc-ai` 为例，写一个真实可跑的 workflow。文件放在 `.github/workflows/svc-ai-deploy.yml`：
+假设你另外有一个单模块 Maven 应用，使用 Java 17，测试所需依赖已能在 CI 环境中准备好。可以在它自己的仓库中编写类似流程，**不是把它加入本篇所在的文档仓库**：
 
 ```yaml
-name: svc-ai CI/CD
+name: Java CI example
 
 on:
-  push:
-    branches: [main]            # 只在 push 到 main 时触发
-    paths:
-      - 'svc-ai/**'             # 只有 svc-ai 目录变了才跑，省 CI 时间
-      - 'cpt-common/**'         # 它依赖的共享组件变了也要重新构建
+  pull_request:
+  workflow_dispatch:
 
-env:
-  REGISTRY: registry.cn-hangzhou.aliyuncs.com   # 镜像仓库地址（阿里云为例）
-  IMAGE: aigc/svc-ai                            # 镜像名
+permissions:
+  contents: read
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest      # CI Runner 用一台干净的 Ubuntu 临时机
+  verify:
+    runs-on: ubuntu-latest
     steps:
-      # ① 拉代码
       - name: Checkout
         uses: actions/checkout@v4
-
-      # ② 装 JDK 17，并开启 Maven 依赖缓存（关键加速点）
-      - name: Set up JDK 17
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven          # 缓存 ~/.m2，下次不用重新下全套依赖
-
-      # ③ 编译 + 跑测试（mvn package 会自动跑 test 阶段）
-      - name: Build & Test
-        run: mvn -B -pl svc-ai -am clean package
-        #   -B 非交互模式（CI 里别等输入）
-        #   -pl svc-ai 只构建 svc-ai 这个模块
-        #   -am 同时构建它依赖的 cpt-* 模块（also make）
-
-      # ④ 登录镜像仓库（账号密码存在 GitHub Secrets，绝不写进 yaml）
-      - name: Login to Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USER }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
-
-      # ⑤ 构建并推送镜像，tag 用本次提交的短 sha
-      - name: Build & Push image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./svc-ai
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
-
-      # ⑥ 用新镜像更新 K8s 里的 svc-ai Deployment
-      - name: Deploy to K8s
-        run: |
-          echo "${{ secrets.KUBECONFIG }}" > kubeconfig
-          export KUBECONFIG=kubeconfig
-          kubectl set image deployment/svc-ai \
-            svc-ai=${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }} \
-            -n aigc-prod
-          kubectl rollout status deployment/svc-ai -n aigc-prod --timeout=120s
+          cache: maven
+      - name: Compile and test
+        run: mvn -B verify
 ```
 
-**怎么读这段 yaml**：
+这里的 `pull_request` 在变更评审时触发，`workflow_dispatch` 提供手动触发入口。示例只做检查，不持有生产凭据，也没有部署步骤。第三方 Action 的版本应按团队策略审查与固定，生产流程通常还会固定到审核过的提交。
 
-- `on.push.branches` + `paths`：触发条件。和你 VitePress 那份 `on: push` 一个道理，只是这里加了 `paths` 过滤——微服务仓库里几十个服务，不能每次改一行都把全部重新构建一遍。
-- `secrets.REGISTRY_TOKEN`、`secrets.KUBECONFIG`：所有密码、kubeconfig 都存在仓库的 **Settings → Secrets** 里，yaml 里只写 `secrets.XXX` 这样的占位（具体引用语法见上面的 yaml 示例）。这就是 [第二十五章 配置与环境管理](/back-end/frontend-backend-guide/25-config-and-env) 讲的「密钥绝不进代码库」在 CI 里的落地。
-- `cache: maven`：**最重要的加速项**。Java 项目首次构建要从 Maven 中央仓库下几百 MB 依赖；缓存 `~/.m2` 后，没改依赖的构建能从 5 分钟降到 1 分钟。前端类比：等价于缓存 `node_modules` / pnpm store，省掉每次 `pnpm install` 的下载。
-- `kubectl rollout status ... --timeout=120s`：发布完**不是甩手就走**，而是盯着 K8s 把新 Pod 拉起来、探针通过。120 秒内没 Ready，这一步就失败、流水线变红——你立刻知道这次发布出问题了。
+`cache: maven` 主要减少依赖重复下载，不代替依赖版本管理。构建也不应依赖某台 Runner 恰好缓存过的本地包；项目需要完整声明依赖和构建条件。
 
-**触发后在 Actions 页面看到的日志大致长这样：**
+如果日志显示测试失败，先读失败用例及对应报告；如果连依赖都没下载成功，处理的是构建环境或仓库访问。两者都叫“流水线红了”，下一步却不同。也要留意跳过的测试、零测试执行等情况，而不是只找最后一行成功或失败。
 
-```text
-Run mvn -B -pl svc-ai -am clean package
-[INFO] Reactor Build Order:
-[INFO]   cpt-common ......................... SUCCESS
-[INFO]   svc-ai ............................. SUCCESS
-[INFO] Tests run: 37, Failures: 0, Errors: 0, Skipped: 0
-[INFO] BUILD SUCCESS
-...
-#12 pushing manifest for .../aigc/svc-ai:9f3a1c8...
-deployment.apps/svc-ai image updated
-Waiting for deployment "svc-ai" rollout to finish: 1 of 2 updated replicas are available...
-deployment "svc-ai" successfully rolled out
-```
+## 3. 检查通过后，交付的是同一份什么东西
 
-**怎么读这段日志**：`Reactor Build Order` 说明 `-am` 生效了，先编依赖的 `cpt-common` 再编 `svc-ai`；`Tests run: 37 ... Failures: 0` 是测试阶段全绿；最后 `successfully rolled out` 表示 K8s 已把新 Pod 全部拉起且探针通过。**结论**：这一整条从提交到上线，没有任何人碰过服务器。
+**CD** 有两种常见含义：持续交付把产物准备到可发布状态，实际发布可由人批准；持续部署则把通过约定检查的版本自动送入目标环境。采用哪一种，取决于团队的风险与管理要求，不是后端必须推送就上线。
 
-> 💡 GitLab CI 思路完全一致，只是写法换成 `.gitlab-ci.yml` 的 `stages` + `script`，密钥放在 GitLab 的 CI/CD Variables。换了平台，七个阶段一个不少。
+如果以容器交付，检查通过后通常把应用打成镜像，再上传到镜像仓库。平台以后拉取这份镜像，不是在每台业务机器上重新编译源码。镜像构建基础见 [Docker 实战](/back-end/frontend-backend-guide/23-docker-in-practice)。
 
-### 三阶段写法（更接近真实项目）
+先确认 Dockerfile 使用的确实是本次检查过的产物。例如约定 Maven 输出唯一的 `target/app.jar`，Dockerfile 也复制这个文件；不能测试了一个目录，却随手把另一个旧 JAR 放进镜像。跨 job 时还需要显式传递构建产物，每个 job 的工作目录并不天然共享。
 
-上面把 build 和 deploy 写在一个 job 里图省事。实际项目通常拆成显式的 `stages`，让流水线在界面上一目了然：
-
-```text
-┌─────────┐    ┌─────────┐    ┌─────────┐
-│  test   │ ─▶ │  build  │ ─▶ │ deploy  │
-│ 跑测试   │    │ 打+推镜像 │    │  上 K8s │
-└─────────┘    └─────────┘    └─────────┘
-   红则停          红则停        手动按钮(交付) 或 自动(部署)
-```
-
-`deploy` 阶段是否需要人工点一下「确认上生产」，就是**持续交付 vs 持续部署**的分界线。生产环境建议保留这个人工卡点，test 环境则可以全自动。
-
----
-
-## 四、部署到 K8s：镜像怎么换上去
-
-CI 把镜像推到仓库后，CD 要让 K8s 用上新镜像。有两种主流做法。
-
-### 做法 A：kubectl set image（命令式，简单直接）
+在 GitHub Actions 的构建环境中，已有对应 Dockerfile 时，镜像构建步骤的形状可以是：
 
 ```bash
-# 把 svc-ai 这个 Deployment 里名为 svc-ai 的容器，换成新镜像
-kubectl set image deployment/svc-ai \
-  svc-ai=registry.cn-hangzhou.aliyuncs.com/aigc/svc-ai:9f3a1c8 \
-  -n aigc-prod
+# GITHUB_SHA 由 GitHub Actions 提供；这里只展示构建格式
+# 执行会下载基础镜像并创建本地镜像，不是查看命令
+docker build -t "registry.example.com/demo/task-api:${GITHUB_SHA:?}" .
 ```
 
-**预期输出：**
+示例仓库地址不可直接使用。推送还需要真实仓库、网络和最小权限的认证，应通过受保护的凭据配置或短期身份取得，不把密码写进 YAML，也不在日志中输出。来自不可信 PR 的代码不应取得发布凭据或生产权限。
 
-```text
-deployment.apps/svc-ai image updated
+### 为什么要记录版本，而不只写 latest
+
+`latest` 这样的可变标签容易被覆盖，无法单凭名称知道具体内容。通常用提交 SHA 等唯一版本标识标记镜像，并记录构建来源；但 SHA 标签本身仍可能被重新推送，并不天然不可变。
+
+更严格的交付可以记录镜像 digest，用它确认实际内容，并让测试、预发布和正式发布提升同一份镜像，而不是每个环境各重建一次。配置与密钥在运行时按环境注入，不能烘焙进通用镜像，见 [配置与环境管理](/back-end/frontend-backend-guide/25-config-and-env)。
+
+即便源码相同，基础镜像、依赖或构建参数变化，也可能得到不同镜像。因此“有 commit SHA”只是追溯的一部分，还要保留构建记录和实际镜像标识。
+
+## 4. 镜像准备好以后，平台才开始更新应用
+
+到这里得到的是可交付产物，还没有证明用户已经在使用它。如果团队使用托管应用平台，就按平台的发布方式交付；如果使用 Kubernetes，则由发布系统更新 Deployment 等资源，不必让每个开发者直接持有生产 kubeconfig。
+
+发布前先确认这份镜像能在目标环境拉取，新增配置已准备好，数据库与旧版仍兼容。有数据库迁移时，要把它单独考虑：滚动过程中旧版和新版可能同时存在，先删旧字段再发新版，可能让仍运行的旧副本立刻失败。
+
+Kubernetes 中，修改 Pod 模板里的镜像会触发更新。可以由发布系统生成并应用 manifest，也可以使用受控命令；无论哪种，都应有清楚的期望状态和记录。只手动改集群而不更新配置来源，下一次自动同步可能覆盖它。
+
+::: details 按需看：Kubernetes 更新命令所在的位置
+
+下面只说明一类自管发布的动作，**不是要求执行的练习**。必须先有真实 Deployment、拉取凭据、合适的探针、授权与回退安排；命令会修改集群，不应在陌生或生产环境照抄。
+
+```bash
+# 先在授权终端核对目标集群，demo 是占位命名空间
+kubectl config current-context
+# 更新命名为 app 的容器镜像；地址与版本均为占位值
+kubectl set image deployment/task-api \
+  app=registry.example.com/demo/task-api:example-version -n demo
+# 观察 Deployment 更新结果；此命令本身不触发部署
+kubectl rollout status deployment/task-api -n demo --timeout=120s
 ```
 
-执行后 K8s 自动开始**滚动更新**（见下一节）。优点是一条命令搞定，CI 里好写；缺点是「集群当前状态」和「Git 里的 manifest」会不一致——manifest 文件里还写着旧 tag，靠人记着同步。
+`image updated` 说明更新请求已被接受，不表示镜像能拉下来或应用能运行。`rollout status` 超时退出表示观察未在规定时间内成功结束，不会自动回滚，也不意味着后台更新已经停止。
 
-### 做法 B：改 manifest 再 apply（声明式，可追溯）
-
-更规范的做法是把镜像 tag 写进 YAML manifest，提交到 Git，再 `apply`：
+若使用 manifest，关键字段仍是 Deployment 的 Pod 模板：
 
 ```yaml
-# k8s/svc-ai/deployment.yaml 里的关键片段
 spec:
   template:
     spec:
       containers:
-        - name: svc-ai
-          image: registry.cn-hangzhou.aliyuncs.com/aigc/svc-ai:9f3a1c8  # ← CI 自动替换这一行
+        - name: app
+          image: registry.example.com/demo/task-api:example-version
 ```
+
+这只是字段片段，不是完整可部署文件。Helm、Kustomize 或 GitOps 控制器可以管理不同环境的配置，但仅仅“改 YAML 再 apply”并不自动构成完整的 GitOps 管理。
+:::
+
+## 5. 更新过程中，流量怎样交给新版
+
+以 Kubernetes 常见的滚动更新为例，控制器逐步创建新版 Pod、缩减旧版。readiness 探针表示实例是否适合接流量，更新策略限制临时增加和不可用的副本数量。相关机制见 [Kubernetes 实战](/back-end/frontend-backend-guide/24-kubernetes-in-practice)。
+
+但探针通过只反映选定的检查项。新版本也可能已经 Ready，却在某类任务上报错。发布是否可继续，还要看实际接口、错误率、延迟、依赖负载和业务结果，不能只由一条 `successfully rolled out` 决定。
+
+需要控制新版本影响范围时，再考虑其他策略：
+
+| 策略 | 怎样交接请求 | 适合解决的问题与代价 |
+| --- | --- | --- |
+| 滚动更新 | 逐步替换副本，新旧短时共存 | 日常更新较简单，但依赖版本兼容、容量与停机处理 |
+| 蓝绿 | 准备两组版本，再切入口 | 便于保留旧版回切，但要多占资源；连接和路由收敛不是绝对瞬时 |
+| 金丝雀 | 先把部分可识别流量交给新版，再比较 | 限制初期影响，但需可靠分流、版本指标和观察条件 |
+
+普通 Deployment 的滚动更新不等于精确按 5% 用户做金丝雀。按用户、租户或权重分流，需要入口或专门发布系统支持；长连接、会话和后台任务也要纳入考虑。
+
+蓝绿或金丝雀并不自动解决数据库不兼容，也不保证回切就能撤销新版本已经写入的数据。选择策略时，要看这次改动的风险，而不是简单认定某一种“最安全”。
+
+## 6. 如果新版出问题，怎样退回
+
+发布前就应明确上一个可用镜像、配置与数据库兼容条件，并由有权限的人准备回退方式。不能等出问题后才发现旧镜像已被清理，或新版迁移使旧代码无法运行。
+
+Kubernetes 可以先查看 Deployment 的历史：
 
 ```bash
-kubectl apply -f k8s/svc-ai/deployment.yaml -n aigc-prod
+kubectl rollout history deployment/task-api -n demo
 ```
 
-好处是**「线上跑的是哪个版本」永远等于「Git 里写的版本」**，可审计、可回溯——这套思想叫 GitOps（一切以 Git 为准）。管理多个服务、多套环境时，再上 **Helm**（把 manifest 模板化 + 参数化，像后端的「组件库 + props」）或 **Kustomize**（按环境叠加差异，像给基础 manifest 打 patch）来管理这堆 YAML。本章不展开，知道有这两个工具、解决「YAML 太多太重复」的问题即可。
+revision 是 Pod 模板的修订记录，不是自动附带业务版本说明的完整发布档案。镜像与配置关系仍需结合发布系统记录确认，`CHANGE-CAUSE` 也不一定有内容。
 
-### 铁律：镜像 tag 用 commit sha，永远不要用 latest
-
-```text
-✅  svc-ai:9f3a1c8     ← 每次提交一个唯一 tag，一眼对应一次 commit
-❌  svc-ai:latest      ← 浮动 tag，今天的 latest ≠ 明天的 latest
-```
-
-**为什么 `latest` 是坑**：
-
-- **回滚无门**。出事想退回上个版本，但 `latest` 已经被覆盖，你根本拉不到「上一个 latest」是哪个。用 sha 时，回滚就是把 tag 换回 `8c2e0d1`，精准明确。
-- **缓存歧义**。K8s 默认对已存在的 tag 不重新拉镜像。两个节点上的 `latest` 可能是不同时间拉的、内容不一样，排查问题时人会疯。
-- **追溯断链**。线上报错，你想知道「现在跑的到底是哪行代码」。tag 是 `9f3a1c8` 就能直接 `git show 9f3a1c8` 定位；是 `latest` 就只能猜。
-
-> 💡 **前端类比**：这等价于你绝不会把生产依赖写成 `"react": "latest"`，而是锁定 `"react": "18.3.1"`，并用 lockfile 钉死。`latest` 在前端依赖里是大忌，在后端镜像里同样是大忌。用 `github.sha` 当 tag，就是镜像世界的 lockfile。
-
----
-
-## 五、三种发布策略：怎么换版本不出事
-
-新镜像准备好了，最后一步是「把流量从旧版本切到新版本」。怎么切，决定了用户会不会感知到抖动、出事能多快回滚。
-
-### 滚动发布（Rolling Update，K8s 默认）
-
-逐个替换 Pod：起一个新版本 Pod，等它 Ready，再干掉一个旧的，如此循环，直到全部换完。这正是 [第二十四章](/back-end/frontend-backend-guide/24-kubernetes-in-practice) 里 Deployment 的默认行为。
-
-```text
-旧 旧 旧 旧   →   新 旧 旧 旧   →   新 新 旧 旧   →   新 新 新 新
-            起1个新的Ready    继续替换         全部换完
-```
-
-```yaml
-# Deployment 里控制滚动节奏的参数
-spec:
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1           # 最多临时多起 1 个 Pod（多占点资源换平滑）
-      maxUnavailable: 0     # 替换期间不允许少于期望数量 → 全程不掉容量
-```
-
-- **优点**：零额外环境、配置简单、默认就有，平滑不停机。
-- **缺点**：发布过程中**新旧版本同时在线**（可能持续一两分钟），如果新版接口和旧版不兼容会出乱子；回滚也是「再滚一遍」，不够快。
-- **适用**：绝大多数无状态服务的日常发布，比如 `svc-user`、`svc-ai`。
-
-### 蓝绿发布（Blue-Green，秒级回滚）
-
-准备**两套完整环境**：蓝（当前生产）和绿（新版本）。绿环境部署好、自测通过后，把流量入口**一次性全切**到绿。出事就把入口切回蓝，秒级回滚。
-
-```text
-                  ┌──────────────┐
-   100% 流量 ──▶  │ Service (入口) │
-                  └──────┬───────┘
-            切换前↓              ↓切换后
-        ┌─────────┐        ┌─────────┐
-        │ 蓝(旧版) │        │ 绿(新版) │
-        │  运行中  │        │  待命   │
-        └─────────┘        └─────────┘
-   切流量 = 改 Service 的 selector，从 version:blue 改成 version:green
-```
-
-- **优点**：切换是原子的，用户不会撞上新旧混跑；**回滚只需把入口切回去，秒级生效**。
-- **缺点**：要**双倍资源**（两套环境同时存在）；数据库等有状态依赖需要两套都兼容。
-- **适用**：对发布平滑性要求极高、且能承担双倍资源的核心链路，比如大促前的 `svc-gateway`。
-
-### 金丝雀发布（Canary，先小流量验证）
-
-先把**一小部分流量**（比如 5%）放给新版本，盯着监控看错误率、延迟正常，再逐步放大到 20%、50%、100%。名字来自矿工用金丝雀探测瓦斯——让小批用户先「试毒」。
-
-```text
-   95% ──▶ 旧版 (svc-ai v1)
-    5% ──▶ 新版 (svc-ai v2)   ← 盯监控：错误率/延迟正常？
-        │
-        ▼ 正常，逐步放量
-   80% v1 / 20% v2  →  50% / 50%  →  0% / 100%（全量）
-        │
-        ▼ 异常
-   立即把 5% 切回 v1，只有极少数用户受影响
-```
-
-- **优点**：**真实生产流量验证**，问题暴露在 5% 用户而非 100%；放量节奏可控。
-- **缺点**：流量切分需要更强的能力（Ingress 权重、或 Istio 这类服务网格），运维复杂度最高。
-- **适用**：高风险变更（如 `svc-canvas` 改了核心任务编排逻辑），不敢一把全量时。
-
-| 策略 | 资源开销 | 回滚速度 | 复杂度 | 典型场景 |
-| --- | --- | --- | --- | --- |
-| 滚动 | 低（多 1 个 Pod） | 慢（再滚一遍） | 低 | 日常发布，默认选它 |
-| 蓝绿 | 高（双份） | 秒级（切入口） | 中 | 核心链路、零抖动要求 |
-| 金丝雀 | 中（多一组小副本） | 快（切回小流量） | 高 | 高风险变更、灰度验证 |
-
-> 💡 **前端类比**：金丝雀就是你做过的「灰度发布 / A/B 放量」——先给 5% 用户看新版页面，数据没问题再全量。蓝绿则像 Vercel 的 Preview Deployment + Promote：新版本先在独立环境跑通，确认无误后一键提升为 Production。
-
----
-
-## 六、回滚：发布的安全带
-
-发布的第一原则不是「不出事」，而是「**出事能在一分钟内退回去**」。K8s 把每次 Deployment 变更都记成一个 revision，回滚是一条命令。
-
-**症状**：刚发布的 `svc-ai:9f3a1c8` 上线后，监控告警错误率飙升，需要立即退回上个版本。
+如果经过授权，确认某个 revision 对应可运行的旧模板，可以按团队流程回退。下面只是说明命令，执行前必须换成实际目标：
 
 ```bash
-# 1. 看历史版本
-kubectl rollout history deployment/svc-ai -n aigc-prod
+# 修改集群：示例回退到已经核对过的 revision 3
+kubectl rollout undo deployment/task-api -n demo --to-revision=3
+kubectl rollout status deployment/task-api -n demo --timeout=120s
 ```
 
-**预期输出：**
+`rolled back` 表示回退请求已被接受，之后仍要观察更新和实际请求结果。它主要恢复 Pod 模板，不会自动撤销数据库迁移、消息、外部配置或已经产生的业务效果；旧模板里引用同名 ConfigMap/Secret 时，也未必能取得历史值。
 
-```text
-deployment.apps/svc-ai
-REVISION  CHANGE-CAUSE
-3         kubectl set image ... svc-ai:8c2e0d1
-4         kubectl set image ... svc-ai:9f3a1c8   ← 当前这个有问题
-```
+因此，回滚不是永远确定的一条救命命令。必要时可能需要关闭新功能、限制入口或向前修复，由实际故障流程决定，而不是反复重启碰运气。
 
-```bash
-# 2. 一键回滚到上一个版本
-kubectl rollout undo deployment/svc-ai -n aigc-prod
-```
+## 7. 这一次交付什么时候才算结束
 
-**预期输出：**
+回到最初的问题：发出去的是哪一版？应能从发布记录找到源码提交、检查结果、镜像标识、目标环境与配置变化。测试没有通过，停在检查；镜像没有上传成功，停在交付；平台更新失败，查实例状态和启动日志；更新完成但业务异常，则按预案停止放量或回退。
 
-```text
-deployment.apps/svc-ai rolled back
-```
-
-```bash
-# 3. 盯着回滚完成
-kubectl rollout status deployment/svc-ai -n aigc-prod
-```
-
-**预期输出：**
-
-```text
-Waiting for deployment "svc-ai" rollout to finish: 1 out of 2 new replicas have been updated...
-deployment "svc-ai" successfully rolled out
-```
-
-**怎么读**：`rollout undo` 默认退回**上一个** revision（也可 `--to-revision=3` 指定）。回滚本身也走滚动更新，所以同样平滑、不掉线。**结论**：用了 sha tag + Deployment 的版本记录，回滚永远是确定性的一条命令，这就是为什么第四节强调不能用 `latest`——`latest` 让回滚这条安全带直接失效。
-
-### 健康检查让发布与回滚都不掉线
-
-回顾 [第二十四章](/back-end/frontend-backend-guide/24-kubernetes-in-practice) 的探针——它是「发布不掉线」的关键，CI/CD 全靠它兜底：
-
-```yaml
-# svc-ai 的探针配置
-readinessProbe:                # 就绪探针：通过了才把流量给这个 Pod
-  httpGet:
-    path: /actuator/health/readiness
-    port: 8085
-  initialDelaySeconds: 10      # 给应用启动留时间
-  periodSeconds: 5
-livenessProbe:                 # 存活探针：连续失败就重启这个 Pod
-  httpGet:
-    path: /actuator/health/liveness
-    port: 8085
-  periodSeconds: 10
-```
-
-滚动更新时，K8s **只把流量切给 readiness 通过的新 Pod**；新版本要是起不来或健康检查不过，旧 Pod 一个都不会被干掉，流量始终留在好的版本上——发布失败也**不掉线**。Spring Boot 用 `spring-boot-starter-actuator` 就能暴露 `/actuator/health` 这套端点（配合 [第二十五章](/back-end/frontend-backend-guide/25-config-and-env) 的配置开启）。
-
-> ⚠️ 没有 readiness 探针的「平滑发布」是假平滑：K8s 一看新 Pod 进程起来了就切流量，但你的 Spring 应用还在加载 Bean、还没连上 MongoDB，这几秒进来的请求全是 5xx。探针就是告诉 K8s「**别看进程起没起，看我说没说 ready**」。
-
----
-
-## 七、上线 checklist
-
-每次往生产发布前，对着过一遍这张清单，能挡掉绝大多数事故：
-
-- **配置就绪**：prod 的 ConfigMap / Secret 都更新了吗？新增的环境变量在生产环境配了吗？（参见 [配置与环境管理](/back-end/frontend-backend-guide/25-config-and-env)）
-- **DB 迁移**：这次发布改了表结构 / 索引吗？迁移脚本是否**向后兼容**——新代码上线但还没全量时，旧代码也得能跑（呼应滚动发布期间新旧并存）。
-- **回滚预案**：上个稳定版本的 sha 记下来了吗？回滚命令是否演练过？数据库变更能不能回滚？
-- **监控告警**：错误率、延迟、QPS 的看板和告警都在线吗？发布后头 15 分钟有没有人盯？
-- **灰度策略**：这次变更风险多大？该用滚动、蓝绿还是金丝雀？要不要先发 test 环境观察一天？
-
-把它贴在发布流程文档里，养成「发布前过清单」的肌肉记忆——这和前端上线前过一遍「环境变量、CDN 缓存、回滚版本」是同一种纪律。
-
----
-
-## 小结
-
-- **CI/CD 的本质是把「从提交到上线」变成机器照剧本执行的确定性流程**：CI 保证代码是好的（自动编译 + 测试），CD 保证好代码自动到线上（打镜像 + 推仓库 + 部署）；这就是你前端用 Vercel / GitHub Actions 享受过的体验，后端要自己拼出来。
-- **流水线七阶段**：拉代码 → 编译（`mvn package`）→ 跑测试 → 构建镜像 → 推镜像仓库 → 部署 K8s → 健康检查，任何一环失败立即停、绝不送半成品上生产；Maven 依赖缓存是关键加速点。
-- **镜像 tag 用 commit sha，绝不用 `latest`**：sha 让每次发布唯一、可追溯、可精准回滚，等价于前端锁死依赖版本 + lockfile。
-- **三种发布策略**：滚动（默认、逐个替换、低开销）、蓝绿（两套环境切流量、秒级回滚、双倍资源）、金丝雀（小流量先验证再放量、最稳但最复杂）；配合 readiness 探针实现发布不掉线。
-- **回滚是发布的安全带**：`kubectl rollout undo` 一条命令退回上版本，前提是用了 sha tag + 探针把关；上线前对着 checklist 过一遍（配置、DB 迁移、回滚预案、监控、灰度）。
-
-### 自测
-
-1. 为什么 CI 流水线里要开启 Maven 依赖缓存？它对应前端构建里的哪个优化？不开会怎样？
-2. 镜像 tag 用 `latest` 会让本章讲的哪个关键能力直接失效？请结合「回滚」说明原因。
-3. `svc-canvas` 要上线一个改动了核心任务编排逻辑的大版本，你担心有隐藏 bug 影响大批用户。滚动、蓝绿、金丝雀三种策略你会选哪个？为什么？
-
-### 下一章
-
-流水线和发布策略就位后，下一步是把前面学的所有东西串起来动手练——下一章 [上手练习](/back-end/frontend-backend-guide/37-hands-on-exercises) 用一组实战任务帮你把整套后端技能跑通一遍。
+这是一条逐步确认的过程，不是“CI 绿了就绝不会出事故”。刚开始可以只把编译测试做好，再接上可追溯的产物与受控发布；不必一次拼出复杂平台。想在本地理解这些环节，可以按需选 [动手练习](/back-end/frontend-backend-guide/37-hands-on-exercises)，其中没有要求连接生产环境。

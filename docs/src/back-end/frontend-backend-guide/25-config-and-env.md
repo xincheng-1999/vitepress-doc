@@ -7,19 +7,15 @@ next:
   link: "/back-end/frontend-backend-guide/23-docker-in-practice"
 ---
 
-# 25. 配置与环境：同一个 task-api，明确连接到哪里
+# 同一个 task-api，这次到底用了哪份配置？
 
-## 学习目标
+你把配置里的端口改成 8081，应用却还在 8080；或者切到了 MySQL，之前的任务却不见了。遇到这类问题，先确认这次进程从哪里读取配置，以及最终连向哪个数据库。
 
-- 读懂当前示例真实的 H2 默认配置、MySQL profile 和 Compose 注入关系。
-- 区分配置文件、环境变量、命令行与 Compose 插值，验证最终生效值而不打印密钥。
-- 让本地练习与生产设计边界分开，不把可跑示例直接当生产配置。
+下面只沿着仓库的 `examples/backend-task-api` 讲，不另造端口和变量。它使用 Java 17 + Spring Boot 3.x，默认接口是 `http://localhost:8080/api/tasks`，启动方式见 [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api)。初始版本没有认证，只用于本机练习。
 
-本章对应 Java 17 + Spring Boot 3.x 单体示例 `examples/backend-task-api`。默认入口 `http://localhost:8080/api/tasks`；完整启动见 [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api)。**当前没有认证，不得公网部署。**
+## 1. 什么都不覆盖时，应用使用什么？
 
-## 25.1 先看真实配置，而不是另造一套端口和变量
-
-示例 `src/main/resources/application.yml` 的默认配置是：
+示例打包的 `src/main/resources/application.yml` 是基础配置：
 
 ```yaml
 server:
@@ -38,13 +34,41 @@ logging:
     level: "%5p [requestId=%X{requestId}]"
 ```
 
-**能直接运行**：在示例目录执行 `mvn spring-boot:run`。它只在本机监听，默认用 H2 内存库；启动初始化表，JVM 退出后数据消失。这里的空密码是受限本地教学设定，不是生产账号建议。
+在示例目录执行 `mvn spring-boot:run`，且没有其他覆盖来源时，应用只监听本机 8080，连接 H2 内存库。启动时初始化表，JVM 退出后数据消失。空密码是受限本地教学配置，不是生产数据库账号建议。
 
-日志 pattern 用于关联 requestId，不代表启用了文件日志、监控端点或全链路追踪。
+末尾的日志 pattern 把 requestId 放进日志，方便关联请求；它不会顺带启用文件日志、监控端点或分布式追踪。读配置时，先把“确实设置了什么”和“猜测还会有什么”分开。
 
-## 25.2 Profile 叠加差异，不是另一套应用
+## 2. 改端口时，先理解谁能覆盖谁
 
-`application-mysql.yml` 是当前唯一的附加 profile 配置：
+配置不一定只来自 YAML。启动进程的环境变量、Java 系统属性和应用命令行参数也可能提供值。在本实验常见的几种来源中，可以先这样理解：
+
+```text
+打包的基础配置 < 打包的已激活 profile 配置
+配置数据 < 操作系统环境变量 < Java 系统属性 < 应用命令行参数
+```
+
+例如 `server.port` 可以通过环境变量 `SERVER_PORT` 绑定，`spring.profiles.active` 对应 `SPRING_PROFILES_ACTIVE`。这是 Spring 的绑定规则，不是任意变量名都能生效。
+
+可以在示例目录做一次端口覆盖实验：
+
+```bash
+SERVER_PORT=8081 mvn spring-boot:run \
+  -Dspring-boot.run.arguments=--server.port=8082
+```
+
+另开终端请求 `http://localhost:8082/api/tasks`。预期本次实例监听 8082，因为应用命令行参数覆盖了环境变量和文件值。若 8082 已被占用，先确认占用者或换空闲端口，按 [Linux 课](/back-end/frontend-backend-guide/21-linux-server-essentials) 的方式辨认进程。
+
+这里还要认清启动时机：环境变量由启动者传给子进程。修改另一个终端的变量，不会倒灌给已经运行的 JVM；改 YAML 也不等于所有运行实例会自动刷新。观察实际监听、启动记录和安全的非敏感值，才能确认这次修改是否生效。
+
+::: details 还有哪些来源可能影响最终值？
+上面的关系不是 Spring Boot 完整优先级表。外部配置位置、多个 profile 的先后顺序、`SPRING_APPLICATION_JSON`、测试属性等也会影响结果。`spring.config.location` 用于替换配置位置，`spring.config.additional-location` 用于补充，两者也不同。
+
+复杂嵌套、列表和带横线的键需要查对应环境变量绑定规则，不随意猜名字。排查时先盘点实际加载来源，不通过全量 `env`、完整 `docker inspect` 或公开配置端点输出密钥。
+:::
+
+## 3. 切到 MySQL，是覆盖连接配置，不是迁移数据
+
+示例还有一份 `application-mysql.yml`：
 
 ```yaml
 # 仅供本地 MySQL / Compose 实验
@@ -58,107 +82,76 @@ spring:
       mode: always
 ```
 
-激活 `mysql` 后，这些键覆盖默认文件的同名键，其余如端口 `8080` 和监听 `127.0.0.1` 继续继承。Compose 通过 `SERVER_ADDRESS=0.0.0.0` 单独放开容器内部监听，避免本机仅切换数据库就把无认证 API 暴露到局域网。`mysql` 是 profile 名，不能据此推断它是生产环境；仓库没有已经实现好的 `prod` profile。
+激活 `mysql` profile 后，这份文件覆盖基础配置的同名键。数据库连接变了，端口 8080 和监听地址 `127.0.0.1` 仍继承基础值。profile 是一组配置差异，不是另一套应用，也不自动表示生产环境；仓库没有现成的 `prod` profile。
 
-`${DB_PASSWORD}` 要求提供值；`${DB_USERNAME:taskapp}` 表示缺失时使用默认值。`DB_URL`、`DB_USERNAME` 这些名字是**被占位符显式引用**，不是随便起名后都会自动映射到 datasource。
+占位符也值得逐个读清：`${DB_USERNAME:taskapp}` 表示从 `DB_USERNAME` 取值，缺少时用 `taskapp`；`${DB_PASSWORD}` 没有默认值，必须提供。这里的变量名是被配置显式引用的，不是给它起一个名字就自然映射到了 datasource。
 
-URL 默认 `localhost:3307` 只适用于你另外提供了该端口的本地 MySQL。**仓库 Compose 不发布 MySQL 宿主端口**，因此不能用这个默认地址连接 Compose 中的数据库；Compose 会另行注入 `mysql:3306`。
+默认 URL 是 `localhost:3307`，只适用于你另行提供了这个端口的本地 MySQL。**仓库 Compose 并不发布 MySQL 宿主端口**，因此这个默认地址不是连接仓库容器数据库的方法。Compose 会覆盖成 `mysql:3306`，下一节再看它怎样传入。
 
-`init.mode=always` 让 MySQL 本地实验执行初始化脚本。`CREATE TABLE IF NOT EXISTS` 不会自动升级已有表；生产设计应改为经过验证的版本化迁移，拆分迁移与业务账号权限，而不是照搬启动初始化。
+切换数据库后看不到 H2 中的任务，是因为连接换了，不是 profile 把数据搬坏了。H2 到 MySQL 的数据和结构迁移要单独处理，数据库选择可回看 [对应章节](/back-end/frontend-backend-guide/09-sql-vs-nosql)。
 
-## 25.3 配置覆盖：看启动者，也看加载位置
+`init.mode=always` 让本地 MySQL 实验执行初始化 SQL。脚本中的 `CREATE TABLE IF NOT EXISTS` 能创建初始表，不能自动升级已有表。生产扩展要采用经过验证的版本化迁移，并把建表、改表所需的迁移权限，与日常查询、写入所需的业务账号权限分开。
 
-只比较本实验常用来源时，可这样理解：
+## 4. 到了 Compose，值要先经过两次传递
+
+Compose 不是把宿主环境原封不动交给应用。先看一个密码如何到达容器：
+
+```yaml
+# Compose 配置中的片段
+services:
+  api:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your shell}
+```
+
+第一步，Compose 读取宿主环境或环境文件，把 `${DB_PASSWORD:?...}` 插入配置；缺失时及早报错。第二步，`environment` 把这个值传给 API 容器进程，Spring 再用上一节的占位符读取它。
+
+所以，宿主 `.env` 参与 Compose 插值，不代表其中所有变量都会进入每个容器；Spring Boot 也不会默认读取任意 `.env` 文件。把变量写在某处与最终应用读到它，是两件事。
+
+仓库为 API 容器传入的关键值如下：
 
 ```text
-打包的基础配置 < 打包的已激活 profile 配置
-配置数据 < 操作系统环境变量 < Java 系统属性 < 应用命令行参数
+SPRING_PROFILES_ACTIVE=mysql
+SERVER_ADDRESS=0.0.0.0
+DB_URL=jdbc:mysql://mysql:3306/tasks?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+DB_USERNAME=taskapp
+JAVA_TOOL_OPTIONS=-Duser.timezone=UTC
 ```
 
-这是简化关系，不是 Spring Boot 完整优先级表。外部配置位置、多个 profile 的顺序、`SPRING_APPLICATION_JSON` 和测试属性等也会影响结果，排查时要先盘点实际来源。替换 `spring.config.location` 与补充 `spring.config.additional-location` 也不是同一动作。
+`mysql` 在这里是 Compose 服务名，API 容器通过它访问数据库 3306。容器的 localhost 指向自己，不是宿主或数据库容器。`SERVER_ADDRESS=0.0.0.0` 只在 Compose 显式覆盖，让映射进来的请求能到达应用；裸机仅激活 mysql profile，仍只监听回环地址。
 
-环境变量的常见绑定如 `server.port → SERVER_PORT`、`spring.profiles.active → SPRING_PROFILES_ACTIVE`；复杂嵌套、列表和带横线的键需查绑定规则，不要随意猜名字。修改 YAML 也不会自动使所有运行对象热更新，修改父终端环境更不会倒灌进已经运行的 JVM。
+宿主发布的是 `127.0.0.1:8080:8080`，所以本机访问 8080 会进入 API 容器，但不会主动监听所有宿主网卡。MySQL 没有宿主端口映射，数据保存在 `mysql-data` 命名卷。API 等 MySQL healthcheck 通过后再启动，这只是初始启动条件，不保证运行中数据库永不失联。
 
-**可运行的覆盖实验**，在示例目录执行：
+### 密码传进去了，数据库却拒绝登录？
 
-```bash
-SERVER_PORT=8081 mvn spring-boot:run \
-  -Dspring-boot.run.arguments=--server.port=8082
-```
+API 用 `DB_PASSWORD` 登录；MySQL 用同一个宿主变量作为初始化的 `MYSQL_PASSWORD`，创建 `taskapp` 账号。应用不使用 root。
 
-另开终端请求 `http://localhost:8082/api/tasks`。**预期结果**：本次实例监听 8082，因为本次应用命令行参数覆盖环境变量与文件中的端口。若已有其他实例占用 8082，先辨认目标或换一个空闲端口，不杀陌生进程。
+这个创建动作只在空数据目录初始化时发生。保留旧卷后改变量，不会自动修改库中已有账号的密码。因此要区分：本次注入的值是什么，以及数据库当前接受的密码是什么。修复应按账号变更流程进行，不为了消除报错就删除数据卷。
 
-排查时核对激活 profile、实际监听和安全的非敏感键。不要通过 `env` 全量输出、完整 `docker inspect` 截图或未经保护的配置端点来证明密码已注入。
-
-## 25.4 Compose 有两层配置，别把宿主和容器混在一起
-
-当前 Compose 的实际关系如下：
-
-| 项目 | 实际值 / 来源 | 含义 |
-| --- | --- | --- |
-| API profile | `SPRING_PROFILES_ACTIVE=mysql` | 在容器内启用上述 MySQL 差异配置 |
-| API 容器监听 | `SERVER_ADDRESS=0.0.0.0` | 只在 Compose 显式覆盖；裸机 mysql profile 仍继承 127.0.0.1 |
-| API 数据库 URL | `jdbc:mysql://mysql:3306/tasks?...` | `mysql` 是 Compose 服务名，不是宿主 localhost |
-| API 数据库账号 | `DB_USERNAME=taskapp`，密码来自 `DB_PASSWORD` | 应用不使用 root 账号 |
-| MySQL 初始化账号 | `MYSQL_USER=taskapp`，`MYSQL_PASSWORD` 引用宿主 `DB_PASSWORD` | 仅空数据目录初始化时创建，改变量不自动改已有账号密码 |
-| 宿主 API 入口 | `127.0.0.1:8080:8080` | 容器内可监听 0.0.0.0，宿主仅发布到回环地址 |
-| MySQL 存储与网络 | `mysql-data` 卷；无宿主端口映射 | 数据卷保留则可跨容器重建；数据库仅供容器网络访问 |
-| API 启动条件与时区 | 等 MySQL healthcheck；`JAVA_TOOL_OPTIONS=-Duser.timezone=UTC` | 启动顺序检查不代替运行中重连、错误处理和时间测试 |
-
-第一层是 **Compose 对配置文件做变量插值**：`${DB_PASSWORD:?...}` 要求宿主环境或 Compose 环境文件有值，缺失时尽早报错。第二层是 **服务的 `environment` 向容器进程传变量**，之后 Spring 再加载它们。宿主 `.env` 参与插值，不等于它的所有变量都会自动进入每个容器；Spring Boot 也不会默认把任意 `.env` 当配置文件。
-
-下面与示例 README 一致，是可运行的**本地选修实验**。口令是公开教学占位，执行时换成不同的、本地专用随机值；生产凭据不得写入命令历史。
+如果已有 Docker 与 Compose v2，可以在示例目录验证这套配置。下面是读者实验，口令需换成两个不同的本地专用随机值，不复用真实凭据：
 
 ```bash
-# 在 examples/backend-task-api 目录；安装 Docker 与 Compose v2
 export DB_PASSWORD='replace-with-local-app-password'
 export MYSQL_ROOT_PASSWORD='replace-with-different-local-root-password'
 docker compose up --build -d
 docker compose logs --tail=100 api
 curl -i 'http://localhost:8080/api/tasks?page=0&size=20'
-# 实验结束，保留数据库卷
+# 结束时保留数据库卷
 docker compose down
 ```
 
-**预期结果**：MySQL 健康后 API 启动，接口 `200`；应用只通过宿主回环地址访问。再次启动并保留卷，之前创建的任务仍在。不要运行 `down -v`，除非已经确认要销毁练习数据；不要把正式库挂到实验目录。
+预期是 MySQL 健康后 API 启动，列表可访问；保留同一项目和卷再次启动，之前创建的任务仍在。不要随手加 `down -v`，也不要把正式数据库挂进练习环境。具体启动检查放在下一课；本轮并未实际运行这套容器实验。
 
-若第一次建卷使用的密码与这次环境不同，连接失败不一定是“变量没注入”，可能是已有账号密码没有改变。应按数据库账号变更流程确认与修复，不能靠删除卷解决所有认证问题。
+## 5. 哪些值可以提交，哪些需要受控保管？
 
-## 25.5 生产边界：最小权限，不等于“放到环境就安全”
+端口、普通阈值等非敏感默认值，可以放在可审查的配置文件里。数据库密码、签名密钥应由受控环境或密钥管理系统提供，并安排访问权限、轮换和撤销。环境变量只是传递方式，不会自动保证保密，部署权限、诊断输出和日志同样可能泄露它们。
 
-| 配置类型 | 起步处理 | 上线前补什么 |
-| --- | --- | --- |
-| 非敏感默认值 | 可审查的配置文件 | 类型/范围校验、变更记录、环境隔离 |
-| 数据库密码、签名密钥 | 受控运行环境注入 | 密钥管理、访问审计、轮换、撤销、备份与故障预案 |
-| 数据库账号 | 本地 `taskapp`，不借 root 运行 API | 按实际操作授权；迁移 DDL 与运行 DML 分开，禁止跨环境滥用 |
-| 功能开关、限流阈值 | 简单配置先满足需求 | 需要动态变化再评估配置中心；明确刷新范围、失败默认与回退 |
+示例 `.gitignore` 忽略 `.env`，只能帮助避免新文件被误加，不能撤销已经提交或传播的密码。误提交时先撤销、轮换，再处理历史和传播范围。生产凭据也不应直接写入命令历史、镜像层或 CI 输出。
 
-示例目录的 `.gitignore` 忽略 `.env`，但忽略规则不会撤销已经提交的内容，也不会保护聊天记录、CI 输出和镜像层。环境变量同样可能被部署权限、诊断工具和日志泄露。Kubernetes Secret 的 Base64 不是加密，仍需 RBAC、静态加密及密钥生命周期管理。
+前端 `VITE_` 变量可能被打进公开 bundle，不能放服务端密钥。Kubernetes Secret 的 Base64 也不是加密，还需要按角色控制访问权限（RBAC）、存储时加密和密钥生命周期管理，相关背景见 [安全课](/back-end/frontend-backend-guide/32-security)。
 
-前端 `VITE_` 变量可能进入公开 bundle，不能承载服务端密钥；“放 `.env` 就保密”是错误直觉。误提交后先撤销/轮换，再按流程处理历史与传播范围。
+以后业务配置多了，可以用 `@ConfigurationProperties` 成组绑定、注册并加验证，让非法部署值在加载时尽早失败；少量取值可用 `@Value`。确有动态变更需求时，再按 [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map) 评估配置中心，并说明哪些值能刷新、失败时用什么默认值、怎样回退。当前示例没有这些动态能力。
 
-后续增加成组业务配置时可用 `@ConfigurationProperties` 加验证，并注册到 Spring；`@Value` 适合少量取值。类型绑定不是编译时验证所有部署值，非法配置应在启动/加载阶段尽早失败。当前示例没有配置中心，不能承诺改一个开关所有实例立即生效。
+配置排查的结果不需要包含密码。写清这次进程的 profile、端口、数据库类型、连接位置和接口结果，就足以让别人继续核对；需要日志时按 [日志课](/back-end/frontend-backend-guide/26-reading-logs) 关联请求。
 
-## 动手验收与自测答案
-
-先完成 8082 覆盖实验，再选做 Compose。验收记录只写 profile、端口、数据库类型、接口结果与卷是否保留，**不记录密码**。
-
-1. 默认启动和 `mysql` profile 用的是同一份 H2 数据吗？
-
-   **答案**：不是。它们连接不同数据库；profile 叠加不迁移已有数据。
-2. 为什么 Compose 里的 API 不能用 `localhost:3307` 连这套 MySQL？
-
-   **答案**：容器 localhost 指自己，仓库也没有把 MySQL 发布到宿主 3307；正确注入为容器网络的 `mysql:3306`。
-3. `.env` 写了变量，API 容器就一定能读到吗？
-
-   **答案**：不一定，要看 Compose 如何引用和向服务传入；Spring 的占位符/属性绑定也要对应。
-4. 改 Compose 中的 MySQL 密码后，保留旧卷为什么可能启动失败？
-
-   **答案**：镜像初始化变量不自动改已有数据库账号；要区分凭据注入与数据库中的账号事实。
-
-## 相关教程
-
-- [CRUD](/back-end/frontend-backend-guide/07-build-a-crud-api) / [数据库选择](/back-end/frontend-backend-guide/09-sql-vs-nosql)：确认本次使用的真实数据源。
-- [Docker](/back-end/frontend-backend-guide/23-docker-in-practice) / [Linux](/back-end/frontend-backend-guide/21-linux-server-essentials)：进程、网络、卷和启动者。
-- [安全](/back-end/frontend-backend-guide/32-security) / [日志](/back-end/frontend-backend-guide/26-reading-logs)：保护凭据，保留必要诊断证据。
-- [功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)：配置中心、Feature Flag 按需求再引入。
+下一篇：[E3 · Docker + MySQL 单体部署](/back-end/frontend-backend-guide/23-docker-in-practice)。我们把这里的配置放回实际启动顺序，看看应用、数据库和数据卷如何配合。

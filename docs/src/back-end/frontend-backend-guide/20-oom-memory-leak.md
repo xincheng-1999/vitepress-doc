@@ -1,507 +1,247 @@
-# OOM 与内存泄漏
+# OOM 与内存泄漏：有 GC，为什么内存还会不够
 
-::: info 按需查阅 · 不属于第一轮必修
-本页保留旧版微服务 / JVM / 运维专题，`svc-*`、`cpt-*` 和 `RtData` 是解释场景，不是仓库中另有一套完整源码，也不代表主线依赖。第一次学习请返回 [五阶段主线](./index)；命令和输出需按自己的授权环境、系统与版本验证，不直接复制到生产。故障注入只在隔离实验进行，dump 与日志也可能包含敏感数据。
+::: info 按需阅读
+这一篇从任务导出占满内存的例子出发，说明怎样区分原因、保留信息和追踪对象。代码与输出都是示意，不对应另一套完整工程；故障复现只在隔离环境进行。内存区域见 [JVM 内存模型](/back-end/frontend-backend-guide/18-jvm-memory-model)，回收机制见 [GC](/back-end/frontend-backend-guide/19-garbage-collection)，第一次学习仍可继续 [五阶段主线](./index)。
 :::
 
-
-> 上一章讲了 GC 怎么自动回收内存，于是你可能会想：「既然有 GC，那 Java 是不是就不会内存泄漏、不会 OOM 了？」
-> 恰恰相反。GC 只回收**没人引用**的对象；只要还有一根引用链拽着它，GC 就动不了它。内存泄漏在 Java 里换了个形式继续存在，而且因为「看不见」，比手动管理内存的语言更难查。
-> 这一章我们把线上最常见的 5 类 OOM 逐个拆开（报错关键字 + 典型原因），再讲清「Java 有 GC 为什么还会泄漏」，最后给一套能在生产环境真正用起来的定位流程：自动抓 heap dump → 用 MAT 找占用大户 → 用 `jmap` 看实时分布。
-
-承接上一章 [垃圾回收 GC](/back-end/frontend-backend-guide/19-garbage-collection)；本章的内存区域名词（堆 Heap、Metaspace、栈、Direct Memory）若不熟，回看 [JVM 内存模型](/back-end/frontend-backend-guide/18-jvm-memory-model)。
-
-> 💡 **前端类比**：你在浏览器里也遇过内存泄漏——组件卸载了但 `addEventListener` 没 `removeEventListener`，或者 `setInterval` 没 `clearInterval`，闭包一直拽着 DOM 节点不放，Chrome DevTools 的 Memory 面板里堆越涨越高。Java 的泄漏本质一模一样：**该断的引用没断**。区别只是后端进程要连续跑几个月不重启，泄漏会日积月累，最终把整个服务拖垮。
-
----
-
-## 20.1 OOM 不是一种错误，是一类错误
-
-很多人一看到 `OutOfMemoryError` 就慌，其实它后面那半句话才是关键——它告诉你**是哪块内存不够了**，而不同的区域对应完全不同的原因和解法。
-
-```text
-java.lang.OutOfMemoryError: Java heap space
-                           └────────┬───────┘
-                            这半句才是诊断的起点
-```
-
-先记住一张总表，后面逐个展开：
-
-| 报错关键字 | 哪块内存满了 | 最常见的真实原因 |
-| --- | --- | --- |
-| `Java heap space` | 堆 Heap | 堆配小了 / 一次加载太多数据 / 内存泄漏 |
-| `Metaspace` | 元空间（类元数据） | 类加载过多 / 运行时动态生成类（CGLIB、热部署） |
-| `GC overhead limit exceeded` | 堆（间接） | GC 一直在跑但几乎回收不动，接近泄漏的前兆 |
-| `unable to create new native thread` | 线程栈 / 系统资源 | 线程创建失控，没用线程池 |
-| `Direct buffer memory` | 堆外直接内存 | NIO/Netty 的 DirectByteBuffer 没释放 |
-
-> ⚠️ 注意 `OutOfMemoryError` 是 `Error` 不是 `Exception`，**不要去 `catch` 它然后假装没事**。它代表 JVM 已经处于不健康状态，继续运行只会产出更多脏数据。正确做法是让进程崩溃、被 K8s 重启，同时把现场（heap dump）保留下来供事后分析。
-
----
-
-## 20.2 五类 OOM 逐个拆
-
-### 1. `Java heap space`——最常见的一种
-
-```text
-java.lang.OutOfMemoryError: Java heap space
-	at java.util.Arrays.copyOf(Arrays.java:3332)
-	at com.example.svcai.service.ImageService.loadAll(ImageService.java:88)
-```
-
-**三种典型成因**：
-
-1. **堆本来就配小了**：默认 `-Xmx` 不够你的业务量。这不是泄漏，是配置问题。
-2. **一次性加载太多数据**：典型如「查全表」「一次读一个超大文件进内存」。
-3. **内存泄漏**：对象只增不减，迟早撑爆。
-
-`svc-canvas` 里一个真实踩坑——导出用户全部历史画作时，一把捞进内存：
+用户要导出全部历史附件，后端先把它们下载进一个内存缓冲区：
 
 ```java
-// ❌ 危险：用户有 5 万张图，每张元数据 + 缩略图字节，一次性全进堆
-public RtData<byte[]> exportAll(String uid) {
-    List<Canvas> all = canvasRepository.findByUid(uid); // 5 万条全查出来
-    ByteArrayOutputStream zip = new ByteArrayOutputStream();
+public byte[] exportAll(String uid) throws IOException {
+    List<Canvas> all = canvasRepository.findByUid(uid);
+    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     for (Canvas c : all) {
-        zip.write(ossClient.download(c.getThumbUrl())); // 每张缩略图字节全堆在内存
+        buffer.write(ossClient.download(c.getThumbUrl()));
     }
-    return RtData.ok(zip.toByteArray()); // toByteArray 又拷贝一份，瞬间翻倍
+    return buffer.toByteArray();
 }
 ```
 
-**修正方向**：分页/流式处理，别让单次请求的内存占用随数据量线性增长。
+这里沿用 `Canvas` 作为附件记录的示意类型，省略了权限、格式和业务实现。这段代码只是拼接字节，并没有实现 ZIP 格式。
+
+附件越多，列表和缓冲区越大；`toByteArray()` 还会复制一份内容。如果几个用户一起导出，可能很快出现 `OutOfMemoryError: Java heap space`。
+
+**这不一定是泄漏。** 数据此时还被正在执行的请求使用，GC 不能替你删除它。先理解这点，才能避免“有 OOM 就找泄漏”“有 GC 就不会 OOM”这两种误判。
+
+## 1. 先看错误具体指向哪里
+
+`OutOfMemoryError` 是一类错误。冒号后面的描述，比只看到“OOM”更有用：
+
+| 错误或状态 | 先调查什么 | 不要直接下的结论 |
+| --- | --- | --- |
+| `Java heap space` | 堆上限、活跃数据、一次加载量、队列与缓存 | 不一定是泄漏 |
+| `Metaspace` | 类加载数量、类加载器、元空间上限 | 调大堆不直接解决元空间问题 |
+| `GC overhead limit exceeded` | 相应收集器下，GC 花费很多时间却收效很少 | 不是所有收集器都按同一比例触发，也不能据此认定泄漏 |
+| `unable to create new native thread` | 线程数量、原生内存、进程或容器的线程配额 | 不一定是没有线程池，多个池的总量也可能过大 |
+| `Direct buffer memory` | 直接缓冲区使用、并发、库的释放机制与上限 | 堆占用正常也可能发生 |
+| 容器 `OOMKilled` | 容器事件、内存限制和进程总用量 | 不一定有 Java 异常或堆快照；退出码 137 单独也不能证明 OOM |
+
+比如，正常结束的 `new Thread(...)` 会释放相应线程资源，并不是“创建后永不回收”。但每个请求都新建线程，流量高或任务长期阻塞时，仍可能同时存在过多线程。应限制总并发并检查等待原因，见 [线程池与 Executor](/back-end/frontend-backend-guide/15-thread-pools-executor)。
+
+直接缓冲区也不等于所有操作都实现了零拷贝。NIO、Netty 等库的分配和释放机制不同：有的依赖清理机制，有的要求引用计数释放。应按所用库的规则检查，不能一概靠手动 GC 或只增加 `MaxDirectMemorySize`。
+
+`OutOfMemoryError` 属于 `Error`，不是普通业务异常。不要随意捕获后返回成功、继续假装健康；也不能假定它必然让整个进程自动退出。具体是任务失败、线程结束还是进程退出，取决于现场与配置。线上需要有健康检查、摘流和恢复预案，而不是排查时直接强制终止进程。
+
+## 2. 先读取已有信息，不急着抓快照
+
+记录故障时间、实例、错误全文和当时执行的操作，再对齐现有的堆使用量、GC、线程数、容器内存与任务积压。尽量先用已有监控，见 [可观测性](/back-end/frontend-backend-guide/30-observability)。
+
+确需现场采样时，在授权环境中用 `jps -l` 找到进程。核对后，在同一终端用 `PID=实际数字` 设置目标进程号，再读取：
+
+```bash
+jstat -gcutil "${PID:?请先设置已核对的目标 JVM 进程号}" 2000 5
+```
+
+这组命令不修改堆大小，也不主动要求 Full GC；`jstat` 每两秒采样一次，共五次。工具仍有开销，输出和权限要求依环境而异。Linux 上还可以看目标进程的线程数量和驻留内存：
+
+```bash
+ps -o pid,nlwp,rss -p "${PID:?请先设置已核对的目标 JVM 进程号}"
+```
+
+`nlwp` 是线程数，`rss` 通常以 KiB 表示驻留内存，具体以系统手册为准；它不是“堆已用量”，也不等于完整容器用量。这组字段不能直接照搬到所有操作系统。
+
+### 怎样看出泄漏嫌疑
+
+如果相近负载下，经历正常回收后的存活量持续上升，任务结束后仍不回落，就应调查对象是否被不必要地保留。但这只是线索：队列尚未排空、合法缓存预热、业务数据增长，都可能提高基线。
+
+反过来，内存能回落也不能证明完全没有泄漏。需要连续观察代表性时间段，并与请求量、缓存大小、队列长度相互印证，而不是用两行 `jstat` 的百分比就作结论。不要为了“看回收后基线”先在线上强制 Full GC。
+
+## 3. 导出例子先修什么：不要让所有内容同时留在堆里
+
+如果确认是单次导出加载过多，方向是分页或流式处理，限制同时保留的数据量。下面只演示依次读取附件并写给调用方，不是完整的压缩导出实现：
 
 ```java
-// ✅ 流式：边读边写出去，内存占用恒定，不随数据量增长
-public void exportAll(String uid, OutputStream out) {
-    try (Stream<Canvas> stream = canvasRepository.streamByUid(uid)) { // 游标，不一次性加载
-        stream.forEach(c -> {
+public void exportAll(String uid, OutputStream out) throws IOException {
+    try (Stream<Canvas> stream = canvasRepository.streamByUid(uid)) {
+        Iterator<Canvas> items = stream.iterator();
+        while (items.hasNext()) {
+            Canvas c = items.next();
             try (InputStream in = ossClient.openStream(c.getThumbUrl())) {
-                in.transferTo(out); // 8KB 缓冲区滚动拷贝
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                in.transferTo(out);
             }
-        });
+        }
     }
 }
 ```
 
-> 💡 **前端类比**：等价于你不再 `const all = await fetchAll()` 一次性把所有数据塞进内存，而是改用流式 / 分页 / `ReadableStream`，边到边处理边丢弃。前端一般没这么严重是因为单用户数据量小、Tab 关了就清空；后端是 200 个线程同时这么干，且进程不重启。
+这里不再把所有文件装进一个 `ByteArrayOutputStream`，也避免最后再复制一份完整内容。调用方负责输出流的生命周期，方法负责关闭自己打开的查询流和输入流。
 
----
+但方法名叫 `streamByUid`，不代表底层一定流式读取。数据库驱动、查询方式、游标和客户端缓冲都要验证；如果 Repository 先查全量再转成 Stream，仍会占用大量内存。流式处理可以限制峰值，但并不自动保证整个请求恒定内存，更不能忽略慢客户端、连接占用、超时和导出并发上限。
 
-### 2. `Metaspace`——类元数据撑爆
+## 4. 如果请求结束了数据还不释放，沿引用找保留者
 
-```text
-java.lang.OutOfMemoryError: Metaspace
-```
+**内存泄漏**在这里指：业务已经不需要的数据，仍然有有效引用链让它保持可达。GC 不懂业务意图，所以不会回收。JS 中长寿命监听器或计时器保留了不再需要的对象，也是同类问题。
 
-Metaspace 存的是**类的元数据**（类结构、方法、常量池），不是业务对象。它满了通常意味着「加载/生成的类太多」。
-
-**典型原因**：
-
-- **运行时动态生成类**：CGLIB 动态代理、字节码增强、大量 lambda、热部署框架。每生成一个新类就占一格 Metaspace，只增不减。
-- **类加载器泄漏**：自定义 `ClassLoader` 没被回收，它加载的类也跟着无法卸载。Web 容器反复热部署、某些插件机制是重灾区。
-- **没设上限**：Metaspace 默认可以一直涨到吃光机器物理内存。
+### 缓存只进不出
 
 ```java
-// ❌ 反面教材：每次请求都用 ByteBuddy/CGLIB 动态造一个新类
-public Object handle(String type) {
-    Class<?> dynamic = new ByteBuddy()
-        .subclass(Object.class)
-        .name("Generated$" + System.nanoTime()) // 名字每次都不同 = 每次都是新类
-        .make()
-        .load(getClass().getClassLoader())
-        .getLoaded();
-    // ... 这些类永远不会被卸载，Metaspace 一路涨到 OOM
-    return dynamic;
-}
-```
-
-**排查信号**：生产建议显式设上限 `-XX:MaxMetaspaceSize=256m`，这样它撑爆时会**明确报 Metaspace OOM**，而不是悄悄吃光物理内存、导致整机变慢、更难定位。
-
----
-
-### 3. `GC overhead limit exceeded`——GC 在空转
-
-```text
-java.lang.OutOfMemoryError: GC overhead limit exceeded
-```
-
-这条很有迷惑性：堆其实还没 100% 满，但 JVM 主动抛了 OOM。它的判定规则是：**超过 98% 的 CPU 时间花在 GC 上，却只回收回来不到 2% 的堆**。
-
-翻译成人话：垃圾回收器累死累活地跑，但几乎啥也回收不动——因为活着的对象太多了（接近泄漏）。这通常是 `Java heap space` OOM 的前兆，往往伴随服务**响应变得极慢**（CPU 全被 GC 占了）。
-
-> 💡 **前端类比**：像浏览器主线程被一段死循环占满，页面卡到点不动。这里是 JVM 把 CPU 全用来做无效 GC，业务线程几乎拿不到时间片。看到这个报错，**不要简单地调大 `-Xmx` 蒙混过去**，多半是有泄漏在背后。
-
----
-
-### 4. `unable to create new native thread`——线程造太多
-
-```text
-java.lang.OutOfMemoryError: unable to create new native thread
-```
-
-注意：这条**几乎和堆无关**。每个 Java 线程都要在堆外申请一块栈空间（默认约 1MB），并向操作系统申请一个原生线程。线程开太多，要么撞上 OS 的进程线程数上限（`ulimit -u`），要么把内存吃光，于是建不出新线程。
-
-`svc-ai` 里最经典的坑——每来一个请求 `new Thread`，从不复用：
-
-```java
-// ❌ 每个请求都起一条新线程跑生图，高并发下线程数失控
-@PostMapping("/generate")
-public RtData<String> generate(@RequestBody GenReq req) {
-    new Thread(() -> aiClient.draw(req)).start(); // 来一个起一个，永不回收
-    return RtData.ok("submitted");
-}
-```
-
-**修正方向**：用线程池，把并发线程数控制在固定上限内（细节见 [线程池与 Executor](/back-end/frontend-backend-guide/15-thread-pools-executor)）。
-
-```java
-// ✅ 用有界线程池，最多就这么多线程，超出的任务排队或拒绝
-private final ExecutorService pool = new ThreadPoolExecutor(
-    8, 16, 60L, TimeUnit.SECONDS,
-    new LinkedBlockingQueue<>(200),                 // 有界队列
-    new ThreadPoolExecutor.CallerRunsPolicy());     // 满了让调用线程自己跑，形成反压
-
-@PostMapping("/generate")
-public RtData<String> generate(@RequestBody GenReq req) {
-    pool.submit(() -> aiClient.draw(req));
-    return RtData.ok("submitted");
-}
-```
-
-> **排查命令**：先看线程总数。Linux 上 `ps -o nlwp <pid>`，或 `cat /proc/<pid>/status | grep Threads`。如果是几千上万，基本就是没用线程池。
-
----
-
-### 5. `Direct buffer memory`——堆外内存
-
-```text
-java.lang.OutOfMemoryError: Direct buffer memory
-	at java.base/java.nio.Bits.reserveMemory(Bits.java:175)
-```
-
-这是**堆外（off-heap）直接内存**爆了，受 `-XX:MaxDirectMemorySize` 限制。NIO、Netty、某些 OSS/HTTP 客户端会用 `DirectByteBuffer` 做零拷贝。它的回收依赖一个特殊机制（`Cleaner`，挂在 GC 上），如果你只盯着堆，会发现「堆明明很空，却 OOM 了」——因为爆的根本不是堆。
-
-`svc-oss` 大文件分片上传时，每片都 `allocateDirect` 又不复用，就可能撞上这条。**修正方向**：复用 buffer、用池化的 `PooledByteBufAllocator`（Netty），或限制并发分片数。
-
-> 这一类是「堆看起来没问题但还是 OOM」的典型，记住堆外内存的存在，排查时多看一眼 `Direct buffer memory` 关键字。
-
----
-
-## 20.3 Java 有 GC，为什么还会泄漏？
-
-一句话：**GC 只能回收「不再被任何 GC Root 引用」的对象**。所谓内存泄漏，就是某个对象逻辑上你已经不用了，但代码里还有一条引用链拽着它，GC 认为它「活着」，于是永远不回收。它越积越多，最终 OOM。
-
-> 💡 **前端类比**：和 JS 的闭包泄漏完全同构。`element.onclick = () => { /* 引用了一个大对象 */ }`，只要这个 listener 不解绑，那个大对象就一直活着。Java 里把「listener / 静态集合 / ThreadLocal」当成那根没断的引用就行。
-
-下面是后端最高频的 5 种泄漏，每个都给「踩坑 → 修正」。
-
-### 泄漏 1：静态集合 / 缓存只加不删
-
-`static` 字段的生命周期和整个进程一样长，它引用的东西永远不会被 GC。把它当缓存却忘了设上限和过期，就是个无底洞。
-
-```java
-// ❌ 踩坑：静态 Map 当缓存，只 put 从不清理，跑几天必 OOM
 public class PromptCache {
     private static final Map<String, byte[]> CACHE = new HashMap<>();
-    public static void put(String k, byte[] v) { CACHE.put(k, v); }
+
+    public static void put(String key, byte[] value) {
+        CACHE.put(key, value);
+    }
 }
 ```
 
+只要这个类及缓存长期可达，缓存中的数据就会一直被保留。上例还没有处理并发访问；即使换成并发 Map，也没有解决容量问题。
+
+可用有界缓存，例如已有 Caffeine 依赖时：
+
 ```java
-// ✅ 修正：用有界、带过期的缓存（Caffeine），自动淘汰旧条目
 private static final Cache<String, byte[]> CACHE = Caffeine.newBuilder()
-    .maximumSize(10_000)                       // 上限，超了自动淘汰
-    .expireAfterWrite(Duration.ofMinutes(30))  // 过期自动清
-    .build();
+        .maximumSize(10_000)
+        .expireAfterWrite(Duration.ofMinutes(30))
+        .build();
 ```
 
-> 真要用缓存，优先放 [Redis](/back-end/frontend-backend-guide/12-redis-in-practice) 这种带淘汰策略的外部存储，别用进程内的裸 `static Map`。
+这是条目数量上限，不是字节上限。每个 `byte[]` 大小差异明显时，要考虑按权重限制，并估算峰值。过期清理也依缓存维护机制进行，不能理解成到点瞬间清空。是否使用本地缓存或 [Redis](/back-end/frontend-backend-guide/12-redis-in-practice)，取决于访问方式和故障需求；移到 Redis 不会免除容量与淘汰设计。
 
-### 泄漏 2：ThreadLocal 用完不 `remove()`
-
-`ThreadLocal` 在**线程池**场景下尤其危险：线程是复用的，不会销毁，你 set 进去的值会一直挂在那条线程上，跨请求残留——既泄漏内存，又可能把上个用户的数据带给下个用户。
+### 线程复用，让 ThreadLocal 的值跨请求残留
 
 ```java
-// ❌ 踩坑：set 了从不 remove，线程池里的线程一直拿着旧值
 public class UserContext {
     private static final ThreadLocal<String> UID = new ThreadLocal<>();
+
     public static void set(String uid) { UID.set(uid); }
     public static String get() { return UID.get(); }
+    public static void clear() { UID.remove(); }
 }
 ```
 
 ```java
-// ✅ 修正：在请求结束的 finally 里 remove，通常放在拦截器/过滤器
 try {
     UserContext.set(uid);
     chain.doFilter(req, resp);
 } finally {
-    UserContext.clear(); // 内部调 UID.remove()，否则复用此线程的下个请求会读到脏数据
+    UserContext.clear();
 }
 ```
 
-### 泄漏 3：流 / 连接 / 监听器没关
+`finally` 中清理的是当前线程持有的值。线程池会复用线程，不清理既可能保留不需要的数据，也可能让下一个请求读到上一个用户的信息。异步线程上的上下文还要单独按其生命周期处理，不能只在请求线程清理一次就认为全部结束。
 
-`InputStream`、数据库 `Connection`、`HttpClient` 响应体不关，底层资源（文件句柄、socket、缓冲区）就一直占着。
+### 资源没关，与对象泄漏有关但不完全相同
 
-```java
-// ❌ 踩坑：异常路径下 in 不会被关闭
-InputStream in = ossClient.openStream(url);
-byte[] data = in.readAllBytes(); // 这里抛异常，in 就泄漏了
-in.close();
-```
+流、数据库连接和响应体可能持有文件句柄、socket、缓冲区等资源。对自己负责关闭的资源，优先使用 try-with-resources：
 
 ```java
-// ✅ 修正：try-with-resources，无论正常还是异常都自动 close
 try (InputStream in = ossClient.openStream(url)) {
-    byte[] data = in.readAllBytes();
-} // 编译器自动插入 finally { in.close(); }
-```
-
-> 凡是实现了 `AutoCloseable` 的，一律用 try-with-resources。这是 Java 资源管理的铁律，相关基础见 [异常处理](/back-end/java/05-exception)。
-
-### 泄漏 4：线程池 / 连接池没释放
-
-临时 `new` 出来的 `ExecutorService` 用完不 `shutdown()`，它的核心线程会一直存活，进程关不掉、内存也回收不了。连接池同理。
-
-```java
-// ❌ 踩坑：方法里临时建线程池，用完不关，每调一次泄漏一个池
-public void batch(List<Task> tasks) {
-    ExecutorService pool = Executors.newFixedThreadPool(4);
-    tasks.forEach(t -> pool.submit(() -> handle(t)));
-    // 方法返回了，但 pool 的 4 条线程还活着，永远不退出
+    process(in);
 }
 ```
 
+即使 `process` 抛异常，输入流也会关闭。是否由当前方法负责关闭，要看 API 的所有权约定；不要擅自关闭借来的共享客户端。关闭资源也不代表可以放心 `readAllBytes()` 读取任意大文件。相关语法见 [异常处理](/back-end/java/05-exception)。
+
+临时线程池和连接池同样需要生命周期管理：不要每次调用都创建一个池又不关闭；应用级池由所属组件或容器统一管理。`shutdown()` 只是开始关闭，不等于已经等待所有任务完成。
+
+::: details 另一个容易遗漏的保留原因：Map 的 key 没有表达业务相等
+如果用 `TaskKey` 表示“某用户的某类任务”，却每次新建对象并沿用对象身份比较，原本以为的更新可能变成不断新增。需要按照业务含义实现稳定的 `equals` 和 `hashCode`，并避免把会变化的字段用作 key：
+
 ```java
-// ✅ 修正：要么复用全局池（推荐），要么 try-finally 里 shutdown
-ExecutorService pool = Executors.newFixedThreadPool(4);
-try {
-    tasks.forEach(t -> pool.submit(() -> handle(t)));
-} finally {
-    pool.shutdown();
+class TaskKey {
+    private final String uid;
+    private final String type;
+
+    TaskKey(String uid, String type) {
+        this.uid = uid;
+        this.type = type;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        TaskKey that = (TaskKey) other;
+        return Objects.equals(uid, that.uid) && Objects.equals(type, that.type);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(uid, type);
+    }
 }
 ```
 
-### 泄漏 5：作为 Map key 的对象没正确实现 `equals/hashCode`
+这里使用 `java.util.Objects`。不是所有 key 都必须按值相等，关键是实现与你想表达的含义一致；正确相等规则也不能替代容量限制。基础见 [Java 集合](/back-end/java/04-collections)。
+:::
 
-如果一个对象被当作 `HashMap` 的 key，却没重写 `equals`/`hashCode`，每个新对象都被当成不同 key，于是「更新」变成了「不断新增」，Map 只涨不缩。
+## 5. 只有需要对象级证据时，再准备 heap dump
 
-```java
-// ❌ 踩坑：TaskKey 没重写 equals/hashCode，缓存命中率 0，条目无限增长
-class TaskKey { String uid; String type; } // 用默认的对象身份比较
-Map<TaskKey, Task> cache = new HashMap<>();
-// 每次 new TaskKey(...) 都是「新 key」，cache.get 永远 miss，put 永远新增
-```
+监控能说明哪里在增长，通常不能说明“谁引用了谁”。**heap dump** 是某个时刻的堆快照，可用 MAT（Eclipse Memory Analyzer）等工具离线分析。
 
-```java
-// ✅ 修正：重写 equals/hashCode（或直接用 record 自动生成）
-record TaskKey(String uid, String type) {} // record 自动生成 equals/hashCode
-```
+在采集前，必须先明确影响范围：**快照可能暂停应用、触发或伴随回收，并消耗大量磁盘和 I/O；其中可能含密码、令牌、用户数据和请求内容。** 确认授权、业务窗口、可用空间、受控存储和保留期限，不在核心实例高峰时随意执行，也不要上传到公开分析网站。
 
-> 集合与 `equals/hashCode` 的基础见 [Java 集合](/back-end/java/04-collections)。
+### 为下一次故障预先配置
 
----
-
-## 20.4 怎么判断是「泄漏」还是「内存就是不够」？
-
-这是排查的第一个岔路口，走错方向白费功夫。判断依据是**看内存随时间的曲线，尤其是 Full GC 之后能不能降下来**：
-
-```text
-内存使用
-  ↑
-  │              ██   泄漏：锯齿整体抬升，
-  │           ██▔ ▔██     每次 Full GC 后回不到原点，
-  │        ██▔       ▔     基线一路向上 → 迟早 OOM
-  │     ██▔
-  │  ██▔
-  └────────────────────────────→ 时间
-
-  ↑
-  │ ██▏  ▕██▏  ▕██▏  ▕██▏   内存不足/数据量大：
-  │█  ▔▏█  ▔▏█  ▔▏█  ▔▏     锯齿很高但 Full GC 后能落回稳定基线，
-  │    ▏    ▏    ▏    ▏      只是基线本身离上限太近 → 配置问题
-  └────────────────────────────→ 时间
-```
-
-| 现象 | 大概率结论 | 下一步 |
-| --- | --- | --- |
-| 内存**持续上涨**，Full GC 后**降不下来**，基线一路抬高 | **内存泄漏** | 抓 heap dump 找谁在拽着对象不放 |
-| 内存锯齿很高，但 Full GC 后能**回落到稳定基线** | 不是泄漏，是堆配小了 / 单次数据量大 | 调 `-Xmx` 或改流式处理/分页 |
-| 启动没多久、流量也不大就 OOM | 配置太小 或 单请求一次性加载海量数据 | 看 dump 里最大那个对象是不是「一坨集合」 |
-
-**怎么看这条曲线**：用监控（如 Prometheus + Grafana，见 [可观测性](/back-end/frontend-backend-guide/30-observability)）盯 JVM 堆已用量指标；没有监控时，临时用下面的命令手动观察。
+下面是启动配置示意，不是对当前进程的只读操作。`app.jar` 代表自己的应用，`/data/dump` 必须是已经准备好的可写目录：
 
 ```bash
-# 每 2 秒打印一次 GC 统计，连看几分钟
-jstat -gcutil <pid> 2000
+java -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/data/dump \
+  -jar app.jar
 ```
+
+它会在 JVM 能处理的相应 OOM 场景下尝试保存快照，但不保证覆盖每种内存错误，更不能保证进程被内核杀死时还来得及写。目录中可能按 PID 生成文件，重复文件名、磁盘不足或权限问题都可能使写入失败，要验证采集机制而不是只加参数。
+
+容器环境还需确认文件会不会随重建消失；需要保留时使用批准的持久存储。快照大小可能很大，不能简单按 `Xmx` 精确估算磁盘需求。
+
+### 已有快照后，MAT 先回答两个问题
+
+先看 Histogram，找实例多、占用高的类型，例如大量 `byte[]`。这里的 **Shallow Heap** 是对象自身大小，数组自身也包括其数据；大量字节数组不一定代表泄漏，它们可能属于导出、缓存或正常 I/O。
+
+再看 Dominator Tree，找哪些对象保留了大量内存。**Retained Heap** 大致表示：若某对象及其独占保留链可被回收，能一并释放的量。共享数据不能随意重复相加；占用大的对象也不一定是错误对象。
+
+假设发现一个缓存 Map 保留了大量历史任务，继续查看 `Path to GC Roots`，并注意弱引用、软引用等类型的差别。一个可能的强引用路径是：
 
 ```text
-  S0     S1     E      O      M     CCS    YGC   YGCT    FGC    FGCT     GCT
-  0.00  31.25  68.20  92.15  95.30  92.10  1820  45.2    142   88.6    133.8
-  0.00  30.10  71.40  92.30  95.31  92.11  1821  45.3    143   89.7    135.0
+长期存活的类
+  └─ PromptCache.CACHE
+       └─ Map 条目
+            └─ byte[]
 ```
 
-**怎么读这段输出**：
+这能说明缓存正在保留这些数组，但是否泄漏还要回到业务：任务已经结束了吗，缓存是否超出容量或期限？如果数据其实被仍在执行的导出持有，那可能是峰值占用问题，不该把两个场景拼成同一个结论。
 
-- `O` 是老年代（Old）使用率。这里一直贴着 **92% 上下**，而且 `FGC`（Full GC 次数）从 142 → 143 在涨，`FGCT`（Full GC 累计耗时）也在涨——说明**反复 Full GC 都压不下老年代**，这是泄漏的强信号。
-- 如果 `O` 在 Full GC 后能掉到 30%、40% 再慢慢涨，那就不是泄漏，是正常的内存使用节奏。
-- `FGC` 短时间内频繁增长 + 应用变慢 = 很可能正在滑向 `GC overhead limit exceeded`。
+## 6. 服务还活着，可以先看对象直方图吗
 
-**结论**：`O` 居高不下 + Full GC 拉不回来 = 按「泄漏」处理，去抓 dump；否则按「配置/数据量」处理，去调参数或改代码。
-
----
-
-## 20.5 实操定位：让 OOM 自己留下案发现场
-
-### 目标：OOM 时自动 dump，事后慢慢分析
-
-线上 OOM 往往凌晨发生、转瞬即逝，等你登上去进程早被重启了。所以**最重要的一步是在启动参数里挂上自动抓现场**，让 JVM 在 OOM 那一刻把整个堆快照写到磁盘：
+可以，但不要把它当低成本的默认监控。先看现成指标；确有必要且已经评估影响、获得授权后，再考虑：
 
 ```bash
-java -Xmx512m \
-  -XX:+HeapDumpOnOutOfMemoryError \
-  -XX:HeapDumpPath=/data/dump/svc-canvas.hprof \
-  -jar svc-canvas.jar
+jmap -histo:live "${PID:?请先设置已核对的目标 JVM 进程号}"
 ```
 
-> 💡 **前端类比**：相当于给应用挂了一个全局 `window.onerror` + 自动上传当时的完整内存快照到 Sentry，只不过这里抓的是整个 JVM 堆。**这个参数几乎零成本，强烈建议所有线上服务默认开启**——出事时有没有 dump，决定了你是 10 分钟定位还是抓瞎好几天。
+**`:live` 会请求 Full GC，堆遍历可能造成明显停顿。** 不要因为只想看前十行就以为影响小，后面接 `head` 也不会免掉前面的回收和遍历。其他直方图或快照命令也要查对应 JDK 的行为，不能简单等同为“只读就无影响”。
 
-OOM 触发时，日志里会看到：
+输出可能包含：
 
 ```text
-java.lang.OutOfMemoryError: Java heap space
-Dumping heap to /data/dump/svc-canvas.hprof ...
-Heap dump file created [536870912 bytes in 1.842 secs]
+ num     #instances       #bytes  class name
+   1:         48210    402118400  [B
+   2:         50003      3200192  com.example.Canvas
 ```
 
-**怎么读**：看到 `Heap dump file created` 就说明现场已经保存到 `/data/dump/svc-canvas.hprof`（约 512MB，和你的 `-Xmx` 同量级）。在 K8s 里记得把 `HeapDumpPath` 指向一个**挂载的持久卷**，否则 Pod 重启 dump 就随容器一起没了。把这个 `.hprof` 文件拷到本地，用 MAT 打开。
+`[B` 表示 `byte[]`，`#bytes` 是这类对象自身占用的合计，不是完整引用链的保留大小。直方图适合缩小调查范围，不能单靠某类对象数量大就认定它泄漏。更完整的工具权限、影响和采集方式见 [诊断工具箱](/back-end/frontend-backend-guide/29-diagnostic-toolbox)。
 
-### 用 MAT（Eclipse Memory Analyzer）找占用大户
+回到开头的导出故障，合理顺序是：先确认错误区域和故障时间，再看负载与内存趋势；若单次工作量过大，限制加载量和并发；若怀疑不必要的保留，再在可控条件下用快照追引用。不要把“加大内存”“抓 dump”“重启”当成同一种处理。
 
-MAT 是分析 heap dump 的标准工具。打开 `.hprof` 后，它会自动跑一遍 Leak Suspects 报告，但你要会看的核心是两个视图。
-
-**① Histogram（直方图）**——按类统计实例数量和占用字节，回答「哪种对象最多/最占内存」：
-
-```text
-Class Name                                    | Objects   | Shallow Heap | Retained Heap
-----------------------------------------------+-----------+--------------+--------------
-byte[]                                        |   48,210  | 402,118,400  |  402,118,400
-com.example.svccanvas.model.Canvas            |   50,003  |   3,200,192  |  410,330,112
-java.util.HashMap$Node                        |  150,221  |   4,807,072  |   ...
-```
-
-**怎么读 Histogram**：
-
-- `Shallow Heap`：对象自身占的内存。`Retained Heap`：如果这个对象被回收，能连带释放多少——**这才是真正的「占用大户」指标**。
-- 这里 `Canvas` 的 Retained Heap 高达 410MB，意味着「这些 Canvas 对象拽着的那一大坨 `byte[]`（缩略图）加起来 410MB」。结合 20.2 的导出场景，基本锁定就是那 5 万张图全进了内存。
-
-**② Dominator Tree（支配树）**——按「谁拽着谁」排序，直接告诉你「哪个对象（树）占了最多内存」：
-
-```text
-Class Name                                         | Retained Heap | Percentage
----------------------------------------------------+---------------+-----------
-com.example.svccanvas.service.ExportService        |  410,330,112  |   80.4%
-  └─ java.util.ArrayList                            |  409,600,000  |   80.2%
-       └─ 50,003 × com.example.svccanvas.model.Canvas
-```
-
-**怎么读 Dominator Tree**：从顶上往下看，`ExportService` 一个对象就支配了 **80.4%** 的堆——它持有的那个 `ArrayList` 里塞了 5 万个 `Canvas`。这就直接定位到了「哪个类的哪个字段」在囤积内存。
-
-**③ 找 GC Root 引用链**——回答「为什么这玩意儿回收不掉」：在可疑对象上右键 → `Path to GC Roots` → `exclude weak/soft references`。MAT 会画出从 GC Root 到这个对象的引用链：
-
-```text
-ExportService.cache (java.util.ArrayList)
-  ↑ referenced by
-PromptCache.CACHE (static field)   ← 一个 static 字段拽着它，所以永远回收不了
-  ↑ GC Root: System Class
-```
-
-**怎么读**：链条最顶上是 `PromptCache.CACHE` 这个 `static field`，它就是那根「没断的引用」（对应 20.3 的泄漏 1）。看到 `static field` / `Thread` / `ThreadLocal` 出现在 GC Root 链上，基本就是泄漏的真凶。
-
-**结论流程**：Dominator Tree 找到「占最多的那个对象」→ Path to GC Roots 找到「是谁拽着它不放」→ 对照代码里的那个字段，改成有界缓存 / 加 `remove` / 流式处理。
-
-### 不想等 OOM？用 `jmap` 看实时对象分布
-
-服务还活着、内存正在涨但还没爆时，可以直接看当前堆里的对象分布，不用等它崩：
-
-```bash
-# :live 会先触发一次 Full GC，只统计存活对象，更准
-jmap -histo:live <pid> | head -n 15
-```
-
-```text
- num     #instances         #bytes  class name (module)
--------------------------------------------------------
-   1:         48210      402118400  [B (java.base)            ← byte[]，约 383MB
-   2:         50003        3200192  com.example.svccanvas.model.Canvas
-   3:        150221        4807072  java.util.HashMap$Node (java.base)
-   4:        120400        2889600  java.lang.String (java.base)
-```
-
-**怎么读这段输出**：
-
-- 按 `#bytes` 排序，第一名 `[B`（就是 `byte[]`）吃了 383MB，第二名是 5 万个 `Canvas`——和 dump 分析的结论对上了。
-- 隔几分钟再跑一次对比：如果某个类的 `#instances` 一直涨、回不落，它就是泄漏嫌疑。这招在生产上做「快速止血判断」很有用，不用导出几百 MB 的 dump。
-
-> ⚠️ `jmap -histo:live` 会触发 Full GC，可能让服务卡顿几百毫秒到几秒，**别在流量高峰对核心服务频繁执行**。这些诊断工具（`jstat`/`jmap`/`jstack`/`arthas`）的完整用法和注意事项，见 [诊断工具箱](/back-end/frontend-backend-guide/29-diagnostic-toolbox)。
-
----
-
-## 20.6 一张排查决策图
-
-把本章串起来，遇到「内存类报警」时按这个顺序走：
-
-```text
-收到 内存高 / OOM 报警
-        │
-        ▼
- 看报错关键字 ── Metaspace？ ──────→ 查动态生成类 / 类加载器泄漏，设 MaxMetaspaceSize
-        │       native thread？ ───→ 数线程数 ps -o nlwp，改用线程池
-        │       Direct buffer？ ────→ 查 NIO/Netty DirectByteBuffer
-        ▼ (heap space / GC overhead)
- jstat -gcutil 看老年代 O ── Full GC 后能降下来 ──→ 不是泄漏：调 -Xmx 或改流式/分页
-        │
-        └── 降不下来（基线一路涨）──→ 判定泄漏
-                                          │
-                                          ▼
-                          有 .hprof（开了 HeapDumpOnOutOfMemoryError）
-                                          │
-                            ┌─────────────┴─────────────┐
-                            是                          否
-                            ▼                            ▼
-                     MAT: Dominator Tree          jmap -histo:live 实时看
-                     → Path to GC Roots           → 隔几分钟对比涨势
-                            │                            │
-                            └─────────────┬──────────────┘
-                                          ▼
-                          定位到「哪个字段拽着对象」
-                          → 有界缓存 / ThreadLocal.remove
-                          / try-with-resources / shutdown
-```
-
-这套方法论会在 [排查手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook) 里和 CPU 飙高、线程死锁等场景一起整理成可照抄的 playbook。
-
----
-
-## 小结
-
-- `OutOfMemoryError` 不是一种错误而是一类，**冒号后面那半句**（`Java heap space` / `Metaspace` / `GC overhead limit exceeded` / `unable to create new native thread` / `Direct buffer memory`）才是诊断起点，不同区域对应完全不同的原因。
-- Java 有 GC 仍会泄漏，本质是「**该断的引用没断**」：静态集合只加不删、ThreadLocal 不 remove、流/连接不关、线程池不 shutdown、Map key 的 `equals/hashCode` 没写对——记住这 5 个高频坑就覆盖了绝大多数案例。
-- 区分泄漏 vs 内存不足，看 `jstat -gcutil` 里**老年代 `O` 在 Full GC 后能否降下来**：降不下来、基线一路涨 = 泄漏；能回落但基线太高 = 配置小/数据量大。
-- 线上服务一律默认开 `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=...`，让 OOM 自动留下案发现场，且 dump 路径要落在持久卷上。
-- 分析 dump 用 MAT 的 **Dominator Tree（谁占得多）+ Path to GC Roots（谁拽着不放）**；不想等崩就用 `jmap -histo:live` 看实时分布、隔几分钟对比涨势。
-
-### 自测
-
-1. 服务运行三天后内存报警，你用 `jstat -gcutil` 看到老年代 `O` 一直 90% 以上、Full GC 频繁但拉不回来。这是泄漏还是堆配小了？你的下一步操作命令是什么？
-2. 一个用了线程池的 Web 服务，请求结束后没有清理 `ThreadLocal`，会引发哪两类问题（不只内存）？正确的清理代码应该放在哪里？
-3. 堆使用率监控显示一直很健康（不到 50%），服务却抛 `OutOfMemoryError: Direct buffer memory`。为什么堆没满还会 OOM？你会去查哪类对象？
-
-### 下一章
-
-定位内存问题往往离不开服务器本身的观察手段（看进程、看文件句柄、看内存）。下一章 [Linux 服务器入门](/back-end/frontend-backend-guide/21-linux-server-essentials) 带你掌握登上线上机器后必须会的那套基本功。
+跨 CPU、线程和内存的排查顺序见 [排查手册](/back-end/frontend-backend-guide/28-troubleshooting-playbook)。如果还不熟悉服务器上的进程与日志，再按需看 [Linux 服务器入门](/back-end/frontend-backend-guide/21-linux-server-essentials)。

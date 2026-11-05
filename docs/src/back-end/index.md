@@ -1,25 +1,21 @@
 # 后端学习入口
 
-> 如果你是前端开发、还不知道从哪学起，**只从下面的主线开始**，不用先学完 Java 或微服务。
+如果你会写前端、会调用接口，但还不知道后端该从哪学，可以从 [前端转后端教程](/back-end/frontend-backend-guide/index) 开始。
 
-## 唯一主线
+课程围绕一个任务管理系统展开：先看请求怎样到达后端，再写接口、保存数据、加入登录，最后学习部署和排错。不要求先学完 Java，也不要求先搭微服务。
 
-### [前端转后端：从请求到上线](/back-end/frontend-backend-guide/index)
+## 选择现在要做的事
 
-按「请求与网络 → 最小 Java / Spring → 数据与权限 → 真实功能与异步 → 部署和排错」学习，结合 SVG 图、可运行任务 API、失败实验和自测答案。
+- [按顺序开始学习](/back-end/frontend-backend-guide/index)
+- [先在本机跑通一个任务接口](/back-end/frontend-backend-guide/07-build-a-crud-api)
+- [补域名、IP、端口这些网络基础](/back-end/frontend-backend-guide/22-networking-for-backend)
+- [弄清 VPN、堡垒机和跳板机怎样配合](/back-end/frontend-backend-guide/22c-private-network-and-access)
+- [了解附件、导出等功能需要后端做什么](/back-end/frontend-backend-guide/39-backend-feature-map)
+- [查一个术语](/back-end/frontend-backend-guide/90-glossary)
+- [安排学习，或找到卡住时该回哪一课](/back-end/frontend-backend-guide/93-learning-path)
 
-- [想马上跑一个接口](/back-end/frontend-backend-guide/07-build-a-crud-api)
-- [先补网络基础](/back-end/frontend-backend-guide/22-networking-for-backend)
-- [听懂同事：后端功能地图](/back-end/frontend-backend-guide/39-backend-feature-map)
-- [公司内网怎么进：堡垒机、跳板机与 VPN](/back-end/frontend-backend-guide/22c-private-network-and-access)
-- [查一个词：170 条场景词典](/back-end/frontend-backend-guide/90-glossary)
-- [时间怎么安排](/back-end/frontend-backend-guide/93-learning-path)
+## 需要细节时再查专题
 
-## 按需查阅，不是另外两条必修路线
+[Java 专题](/back-end/java/01-environment) 用来补语法、集合、异常和构建工具；[数据库专题](/back-end/database/index) 用来查 SQL、数据库客户端和访问框架。
 
-| 专题 | 什么时候翻 |
-| --- | --- |
-| [Java 语言与工具](/back-end/java/01-environment) | 类、接口、集合、异常或 Maven 看不懂时 |
-| [数据库与访问框架](/back-end/database/index) | 想深入 SQL / JDBC / ORM，或工作确实使用 MongoDB 时 |
-
-[旧 Spring 路线](/back-end/spring-fullstack-roadmap) 已合并到主线，不再并行维护。Python 与 Rust 是其他语言方向，不是这条后端入门线的前置要求。
+它们不是主线前面额外的两套必修课。原来的 [Spring 学习路线](/back-end/spring-fullstack-roadmap) 也已合并到同一份学习地图，不用在两套目录之间切换。
